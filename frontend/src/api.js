@@ -1,21 +1,116 @@
 // Talks to the FastAPI backend through the Vite dev proxy (see vite.config.js).
+// Every request except /health and /login carries the signed-in user's token.
 
 const BACKEND_DOWN =
   "Can't reach the backend. Make sure the FastAPI server is running on http://127.0.0.1:8000 and try again.";
 
 export class ChatError extends Error {}
 
-export async function askQuestion(question) {
+// --------------------------------------------------------------------------
+// Session: the token lives in memory and in sessionStorage (cleared when the tab closes).
+// --------------------------------------------------------------------------
+
+const SESSION_KEY = "portfolio-assistant-session";
+let session = null; // { token, expiresAt, user: { username, display_name, role } }
+let onSessionEnded = () => {};
+
+export function loadSession() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
+    if (saved?.token && new Date(saved.expiresAt) > new Date()) {
+      session = saved;
+      return saved;
+    }
+  } catch {
+    // storage blocked or corrupt: start signed out
+  }
+  clearSession();
+  return null;
+}
+
+function saveSession(value) {
+  session = value;
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(value));
+  } catch {
+    // storage blocked: the session still works until the page is reloaded
+  }
+}
+
+export function clearSession() {
+  session = null;
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+// Called with a message when the backend rejects the token (expired, revoked, ...).
+export function setSessionEndedHandler(handler) {
+  onSessionEnded = handler;
+}
+
+export async function signIn(username, password) {
   let response;
   try {
-    response = await fetch("/chat", {
+    response = await fetch("/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ username, password }),
     });
   } catch {
     throw new ChatError(BACKEND_DOWN);
   }
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    if (response.status === 401) throw new ChatError("Wrong username or password.");
+    if (response.status === 422) throw new ChatError("Enter your username and password.");
+    if (typeof body?.detail === "string") throw new ChatError(body.detail);
+    if (response.status >= 500 && body === null) throw new ChatError(BACKEND_DOWN);
+    throw new ChatError(`Sign-in failed (HTTP ${response.status}).`);
+  }
+  const value = { token: body.access_token, expiresAt: body.expires_at, user: body.user };
+  saveSession(value);
+  return value;
+}
+
+export function signOut() {
+  clearSession();
+}
+
+// fetch() with the bearer token. A 401 ends the session (the token expired or was revoked).
+async function authFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (session?.token) headers.set("Authorization", `Bearer ${session.token}`);
+  let response;
+  try {
+    response = await fetch(url, { ...options, headers });
+  } catch {
+    throw new ChatError(BACKEND_DOWN);
+  }
+  if (response.status === 401) {
+    const body = await response.json().catch(() => null);
+    const message = typeof body?.detail === "string" ? body.detail : "Please sign in again.";
+    clearSession();
+    onSessionEnded(message);
+    throw new ChatError(message);
+  }
+  return response;
+}
+
+export async function fetchCurrentUser() {
+  const response = await authFetch("/me");
+  if (!response.ok) throw new ChatError(`Couldn't check your session (HTTP ${response.status}).`);
+  return response.json();
+}
+
+export async function askQuestion(question) {
+  const response = await authFetch("/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
 
   let body = null;
   try {
@@ -37,6 +132,9 @@ function errorMessage(status, body) {
   const detail = body?.detail;
   if (status === 504) {
     return "The question took too long to answer. Try a narrower question, or ask again.";
+  }
+  if (status === 429) {
+    return typeof detail === "string" ? detail : "You're asking too quickly. Wait a minute and try again.";
   }
   if (status === 422) {
     return "The question couldn't be accepted. Please check it isn't empty or longer than 4,000 characters.";
@@ -67,12 +165,7 @@ export const MAX_UPLOAD_MB = 10;
 export const ALLOWED_EXTENSIONS = [".pdf", ".xlsx"];
 
 async function requestJson(url, options = {}) {
-  let response;
-  try {
-    response = await fetch(url, options);
-  } catch {
-    throw new ChatError(BACKEND_DOWN);
-  }
+  const response = await authFetch(url, options);
   let body = null;
   try {
     body = await response.json();

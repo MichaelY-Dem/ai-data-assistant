@@ -7,6 +7,9 @@ Connects as the admin account from .env (MYSQL_ADMIN_USER / MYSQL_ADMIN_PASSWORD
      with the password QUERY_LOGGER_PASSWORD from .env,
   4. grants it INSERT on that one table and nothing else.
 
+Phase 7 added the username and user_role columns (who asked); rerunning the script
+adds them to an existing table.
+
 The log lives in its own database on purpose: the read-only account Claude queries
 through (ASSISTANT_DB_USER) has SELECT on the whole portfolio database, so a log
 table there would show up in list_tables and Claude could read past questions.
@@ -34,11 +37,19 @@ CREATE TABLE IF NOT EXISTS query_log (
     tools_used     JSON            NOT NULL COMMENT 'Tool names Claude called, in order',
     duration_ms    INT UNSIGNED    NOT NULL,
     status         VARCHAR(16)     NOT NULL COMMENT 'ok or error',
+    username       VARCHAR(64)     NULL     COMMENT 'Signed-in user who asked',
+    user_role      VARCHAR(16)     NULL     COMMENT 'analyst or viewer',
     PRIMARY KEY (id),
     KEY idx_query_log_asked_at (asked_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='One row per POST /chat request'
 """
+
+# Columns added after the table was first created: (name, definition, after column).
+ADDED_COLUMNS = [
+    ("username", "VARCHAR(64) NULL COMMENT 'Signed-in user who asked'", "status"),
+    ("user_role", "VARCHAR(16) NULL COMMENT 'analyst or viewer'", "username"),
+]
 
 
 def log_database() -> str:
@@ -57,6 +68,13 @@ def create_logger() -> None:
                         "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci")
             cur.execute(f"USE `{db}`")
             cur.execute(QUERY_LOG_DDL)
+            cur.execute("SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+                        "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'query_log'", (db,))
+            existing = {row[0] for row in cur.fetchall()}
+            for name, definition, after in ADDED_COLUMNS:
+                if name not in existing:
+                    cur.execute(f"ALTER TABLE query_log ADD COLUMN `{name}` {definition} AFTER `{after}`")
+                    print(f"Added column query_log.{name}.")
             cur.execute("CREATE USER IF NOT EXISTS %s@%s IDENTIFIED BY %s", (user, HOST, password))
             cur.execute("ALTER USER %s@%s IDENTIFIED BY %s", (user, HOST, password))
             cur.execute("REVOKE ALL PRIVILEGES, GRANT OPTION FROM %s@%s", (user, HOST))
@@ -79,8 +97,8 @@ def verify_insert_only() -> None:
         with conn.cursor() as cur:
             # Test insert inside a transaction that is rolled back, so no test row is left behind.
             cur.execute(
-                "INSERT INTO query_log (asked_at, question, answer_length, tools_used, duration_ms, status) "
-                "VALUES (UTC_TIMESTAMP(3), 'setup check', 0, JSON_ARRAY(), 0, 'ok')"
+                "INSERT INTO query_log (asked_at, question, answer_length, tools_used, duration_ms, status, "
+                "username, user_role) VALUES (UTC_TIMESTAMP(3), 'setup check', 0, JSON_ARRAY(), 0, 'ok', NULL, NULL)"
             )
             conn.rollback()
             print("Check 1 passed: logger can INSERT into query_log.")

@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { askQuestion, checkHealth } from "./api.js";
+import {
+  askQuestion,
+  checkHealth,
+  clearSession,
+  fetchCurrentUser,
+  loadSession,
+  setSessionEndedHandler,
+  signOut,
+} from "./api.js";
 import DocumentsPanel from "./DocumentsPanel.jsx";
+import LoginScreen from "./LoginScreen.jsx";
 import Markdown from "./Markdown.jsx";
 
 const EXAMPLE_QUESTIONS = [
@@ -10,9 +19,71 @@ const EXAMPLE_QUESTIONS = [
   "List all pending deals and their value.",
 ];
 
+const ROLE_LABELS = { analyst: "Analyst", viewer: "Viewer" };
+
 let nextId = 1;
 
 export default function App() {
+  const [session, setSession] = useState(() => loadSession());
+  const [notice, setNotice] = useState(null);
+
+  // The backend rejected the token (expired or revoked): back to the sign-in screen.
+  useEffect(() => {
+    setSessionEndedHandler((message) => {
+      setSession(null);
+      setNotice(message);
+    });
+  }, []);
+
+  // A token restored from sessionStorage: confirm it's still valid and refresh name/role.
+  useEffect(() => {
+    if (!session) return;
+    fetchCurrentUser()
+      .then((user) => setSession((s) => (s ? { ...s, user } : s)))
+      .catch(() => {}); // a 401 already signed us out; anything else, keep going
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.token]);
+
+  // Sign out automatically when the token expires.
+  useEffect(() => {
+    if (!session) return;
+    const ms = Math.max(new Date(session.expiresAt).getTime() - Date.now(), 0);
+    const timer = setTimeout(() => {
+      clearSession();
+      setSession(null);
+      setNotice("Your session has expired. Please sign in again.");
+    }, ms);
+    return () => clearTimeout(timer);
+  }, [session]);
+
+  if (!session) {
+    return (
+      <LoginScreen
+        notice={notice}
+        onSignedIn={(s) => {
+          setNotice(null);
+          setSession(s);
+        }}
+      />
+    );
+  }
+
+  return (
+    // key: a different sign-in starts with an empty chat and fresh document state.
+    <Workspace
+      key={session.token}
+      user={session.user}
+      onSignOut={() => {
+        signOut();
+        setSession(null);
+        setNotice("You have signed out.");
+      }}
+    />
+  );
+}
+
+function Workspace({ user, onSignOut }) {
+  const isAnalyst = user.role === "analyst";
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -68,9 +139,23 @@ export default function App() {
             <h1>Portfolio Analyst Assistant</h1>
             <p className="subtitle">Ask questions about the infrastructure portfolio</p>
           </div>
-          <StatusBadge up={backendUp} />
+          <div className="header-side">
+            <StatusBadge up={backendUp} />
+            <div className="user-box">
+              <span className="user-name">{user.display_name}</span>
+              <span className={`role-badge ${user.role}`}>{ROLE_LABELS[user.role] || user.role}</span>
+              <button type="button" className="signout" onClick={onSignOut}>
+                Sign out
+              </button>
+            </div>
+          </div>
         </div>
-        <nav className="tabs" role="tablist" aria-label="Views">
+        {!isAnalyst && (
+          <p className="role-note">
+            Viewer access: deal data and documents are available to Analysts only.
+          </p>
+        )}
+        <nav className="tabs" role="tablist" aria-label="Views" hidden={!isAnalyst}>
           {[
             ["chat", "Chat"],
             ["documents", "Documents"],
@@ -89,15 +174,18 @@ export default function App() {
         </nav>
       </header>
 
-      {/* Both views stay mounted (hidden, not removed) so switching tabs keeps their state. */}
-      <main className="docs" hidden={tab !== "documents"}>
-        {backendUp === false && (
-          <div className="banner docs-banner">
-            The backend isn't responding. Start the FastAPI server on port 8000, then refresh.
-          </div>
-        )}
-        <DocumentsPanel />
-      </main>
+      {/* Both views stay mounted (hidden, not removed) so switching tabs keeps their state.
+          Documents are Analyst-only (the backend enforces it too), so Viewers never load them. */}
+      {isAnalyst && (
+        <main className="docs" hidden={tab !== "documents"}>
+          {backendUp === false && (
+            <div className="banner docs-banner">
+              The backend isn't responding. Start the FastAPI server on port 8000, then refresh.
+            </div>
+          )}
+          <DocumentsPanel />
+        </main>
+      )}
 
       <main className="messages" ref={listRef} hidden={tab !== "chat"}>
         <div className="messages-inner">

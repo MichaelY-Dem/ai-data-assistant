@@ -7,14 +7,22 @@ project's MCP server (mcp_server/server.py). Prompts are read from prompts/.
 Uploaded documents (PDF, Excel) are stored in Azure Blob Storage (the Azurite
 emulator locally); see backend/documents.py.
 
-Endpoints:
-    POST /chat                                    {"question": "..."} -> {"answer", "tools_used", "duration_ms"}
-    GET  /companies                               company codes and names, for pickers
-    POST /documents/upload                        multipart: file (PDF/.xlsx, max 10 MB), company_code (optional)
-    GET  /documents                               uploaded documents (metadata only)
-    POST /documents/{id}/summarize                cited summary of one document
-    POST /companies/{company_code}/one-page-summary   database figures + documents, cited
-    GET  /health                                  liveness check
+Sign-in (backend/auth.py): POST /login returns a JWT; every other endpoint except
+/health needs it as `Authorization: Bearer <token>`. Roles: Analyst sees everything;
+Viewer can chat but can't see the deals table (enforced by the MCP server's role and
+a restricted MySQL account) and can't use the document endpoints.
+
+Endpoints:                                        who
+    POST /login                                   anyone   {"username", "password"} -> token + user
+    GET  /me                                      any role the signed-in user
+    POST /chat                                    any role {"question": "..."} -> {"answer", "tools_used", "duration_ms"}
+                                                           rate limited to 20 per minute per user
+    GET  /companies                               any role company codes and names, for pickers
+    POST /documents/upload                        Analyst  multipart: file (PDF/.xlsx, max 10 MB), company_code (optional)
+    GET  /documents                               Analyst  uploaded documents (metadata only)
+    POST /documents/{id}/summarize                Analyst  cited summary of one document
+    POST /companies/{company_code}/one-page-summary  Analyst  database figures + documents, cited
+    GET  /health                                  anyone   liveness check
 
 Start it from the project root:
     .venv\\Scripts\\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
@@ -26,13 +34,14 @@ import logging
 import os
 import re
 import sys
+import math
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Awaitable, Callable
 
 import anyio
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -58,7 +67,20 @@ from backend.documents import (  # noqa: E402
     validate_company_code,
     validate_upload,
 )
+from backend.auth import (  # noqa: E402
+    AuthNotConfigured,
+    LoginRequest,
+    LoginResponse,
+    Role,
+    User,
+    auth_configured,
+    authenticate,
+    create_token,
+    current_user,
+    require_role,
+)
 from backend.query_log import safe_write_query_log  # noqa: E402
+from backend.rate_limit import RateLimiter  # noqa: E402
 
 log = logging.getLogger("backend")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -71,6 +93,9 @@ MCP_SERVER_NAME = "portfolio"
 MCP_TOOLS = ["list_tables", "describe_table", "run_query"]
 MAX_TURNS = 20               # cap on Claude <-> tool round trips per question
 REQUEST_TIMEOUT_S = 240      # give up on a single request after this long
+
+CHAT_LIMITER = RateLimiter(limit=20, window_s=60)    # per signed-in user
+LOGIN_LIMITER = RateLimiter(limit=10, window_s=60)   # per client address: slows password guessing
 
 # Use the `claude login` subscription credentials, never an API key: the Claude
 # Code CLI the SDK starts would prefer ANTHROPIC_API_KEY if it were set.
@@ -119,7 +144,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="Portfolio analyst assistant",
     description="Ask Claude questions about the infrastructure portfolio database and its documents.",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -127,6 +152,34 @@ app = FastAPI(
 @app.exception_handler(DocumentError)
 async def document_error_handler(_request: Request, exc: DocumentError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+
+
+@app.exception_handler(AuthNotConfigured)
+async def auth_not_configured_handler(_request: Request, exc: AuthNotConfigured) -> JSONResponse:
+    log.error("Sign-in is not configured: %s", exc)
+    return JSONResponse(status_code=503, content={"detail": f"Sign-in is not configured on the server. {exc}"})
+
+
+def rate_limited(limiter: RateLimiter, key: str, what: str) -> None:
+    """Raise 429 with Retry-After if key has used up its requests for the window."""
+    retry_after = limiter.hit(key)
+    if retry_after is not None:
+        seconds = math.ceil(retry_after)
+        log.warning("Rate limit hit: %s (%s)", key, what)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many {what}: the limit is {limiter.limit} per minute. Try again in {seconds} s.",
+            headers={"Retry-After": str(seconds)},
+        )
+
+
+def chat_user(user: User = Depends(current_user)) -> User:
+    """The signed-in user, after counting this request against their /chat limit."""
+    rate_limited(CHAT_LIMITER, user.username, "questions")
+    return user
+
+
+analyst_only = require_role(Role.ANALYST)
 
 
 # --------------------------------------------------------------------------- #
@@ -219,8 +272,29 @@ def load_system_prompt() -> str:
         raise HTTPException(status_code=500, detail=f"Cannot read {SYSTEM_PROMPT_PATH.name}: {exc}") from exc
 
 
-def agent_options(system_prompt: str, use_db: bool = True) -> ClaudeAgentOptions:
-    """Agent settings. use_db=False gives Claude no tools at all (document-only tasks)."""
+# Appended to the system prompt. This only shapes how Claude words the answer: the
+# restriction itself is enforced by the MCP server's role and the Viewer MySQL account.
+ROLE_NOTES = {
+    Role.ANALYST: (
+        "\n\n## Current user\n\nThe user is signed in with the Analyst role: full read access "
+        "to every table."
+    ),
+    Role.VIEWER: (
+        "\n\n## Current user\n\nThe user is signed in with the Viewer role. The `deals` table is "
+        "restricted for this role and the database tools will refuse it. If a question needs deal "
+        "data (deals, transactions, acquisitions, exits, deal values, counterparties), say in the "
+        "first sentence that deal data is restricted for their role, then answer any part you can "
+        "from the other tables. Never guess or reconstruct deal information."
+    ),
+}
+
+
+def agent_options(system_prompt: str, *, role: Role | None, use_db: bool = True) -> ClaudeAgentOptions:
+    """Agent settings. use_db=False gives Claude no tools at all (document-only tasks).
+
+    With use_db=True, `role` decides which MySQL account the MCP server connects as and
+    which tables it refuses. It must come from the verified token.
+    """
     common = dict(
         model=MODEL,
         system_prompt=system_prompt,
@@ -232,13 +306,15 @@ def agent_options(system_prompt: str, use_db: bool = True) -> ClaudeAgentOptions
     )
     if not use_db:
         return ClaudeAgentOptions(**common, mcp_servers={}, allowed_tools=[], max_turns=2)
+    if not isinstance(role, Role):
+        raise ValueError("A database-enabled agent needs the signed-in user's role.")
     return ClaudeAgentOptions(
         **common,
         mcp_servers={
             MCP_SERVER_NAME: {
                 "type": "stdio",
                 "command": sys.executable,
-                "args": [str(MCP_SERVER_PATH)],
+                "args": [str(MCP_SERVER_PATH), "--role", role.value],
             }
         },
         allowed_tools=[f"mcp__{MCP_SERVER_NAME}__{name}" for name in MCP_TOOLS],
@@ -265,30 +341,33 @@ async def run_agent(prompt: str, options: ClaudeAgentOptions) -> tuple[str, list
     return result.result, tools_used
 
 
-async def ask_claude(question: str) -> tuple[str, list[str]]:
-    return await run_agent(question, agent_options(load_system_prompt()))
+async def ask_claude(question: str, role: Role) -> tuple[str, list[str]]:
+    return await run_agent(question, agent_options(load_system_prompt() + ROLE_NOTES[role], role=role))
+
+
+def summary_prompt(doc: Document) -> str:
+    return (f"Summarize the document {doc.filename}.\n\n{UNTRUSTED_NOTICE}\n\n"
+            f"{render_documents_for_prompt([doc])}{UNTRUSTED_REMINDER}")
 
 
 async def summarize_with_claude(doc: Document) -> tuple[str, list[str]]:
     system = load_prompt("document_summary.md").replace("{filename}", doc.filename)
-    prompt = (f"Summarize the document {doc.filename}.\n\n{UNTRUSTED_NOTICE}\n\n"
-              f"{render_documents_for_prompt([doc])}{UNTRUSTED_REMINDER}")
-    return await run_agent(prompt, agent_options(system, use_db=False))
+    return await run_agent(summary_prompt(doc), agent_options(system, role=None, use_db=False))
 
 
-async def one_pager_with_claude(company: Company, docs: list[Document]) -> tuple[str, list[str]]:
+async def one_pager_with_claude(company: Company, docs: list[Document], role: Role) -> tuple[str, list[str]]:
     system = (load_prompt("one_page_summary.md")
               .replace("{company_code}", company.company_code)
-              .replace("{company_name}", company.name))
+              .replace("{company_name}", company.name)) + ROLE_NOTES[role]
     names = ", ".join(d.filename for d in docs) or "none"
     prompt = (f"Write the one-page investment summary for {company.name} ({company.company_code}). "
               f"Query the database for its figures. Uploaded documents for this company: {names}.\n\n"
               f"{UNTRUSTED_NOTICE}\n\n{render_documents_for_prompt(docs, max_chars_per_doc=60_000)}"
               f"{UNTRUSTED_REMINDER}")
-    return await run_agent(prompt, agent_options(system, use_db=True))
+    return await run_agent(prompt, agent_options(system, role=role, use_db=True))
 
 
-async def timed_and_logged(label: str, call: Callable[[], Awaitable[tuple[str, list[str]]]]
+async def timed_and_logged(label: str, user: User, call: Callable[[], Awaitable[tuple[str, list[str]]]]
                            ) -> tuple[str, list[str], int]:
     """Run a Claude call with a timeout, log it to query_log, map failures to HTTP errors."""
     asked_at = dt.datetime.now(dt.timezone.utc)
@@ -311,6 +390,8 @@ async def timed_and_logged(label: str, call: Callable[[], Awaitable[tuple[str, l
         tools_used=tools_used,
         duration_ms=duration_ms,
         status="error" if error else "ok",
+        username=user.username,
+        user_role=user.role.value,
     ))
 
     if error:
@@ -356,25 +437,52 @@ async def get_company(code: str | None) -> Company:
 # Endpoints
 # --------------------------------------------------------------------------- #
 
+PUBLIC_PATHS = {"/health", "/login"}  # everything else needs a token (checked in the tests)
+
+
+@app.post("/login", response_model=LoginResponse)
+async def login(body: LoginRequest, request: Request) -> LoginResponse:
+    client = request.client.host if request.client else "unknown"
+    rate_limited(LOGIN_LIMITER, f"login:{client}", "sign-in attempts")
+    # bcrypt is deliberately slow (~0.25 s): keep it off the event loop.
+    user = await anyio.to_thread.run_sync(lambda: authenticate(body.username, body.password))
+    if user is None:
+        log.warning("Failed sign-in for username %r from %s", body.username[:64], client)
+        raise HTTPException(status_code=401, detail="Wrong username or password.")
+    token, expires_at = create_token(user)
+    log.info("Signed in: %s (%s) from %s", user.username, user.role.value, client)
+    return LoginResponse(access_token=token, expires_at=expires_at, user=user)
+
+
+@app.get("/me", response_model=User)
+async def me(user: User = Depends(current_user)) -> User:
+    return user
+
+
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(request: ChatRequest, user: User = Depends(chat_user)) -> ChatResponse:
     question = request.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="question must not be blank")
-    answer, tools_used, duration_ms = await timed_and_logged(question, lambda: ask_claude(question))
+    answer, tools_used, duration_ms = await timed_and_logged(
+        question, user, lambda: ask_claude(question, user.role))
     return ChatResponse(answer=answer, tools_used=tools_used, duration_ms=duration_ms)
 
 
 @app.get("/companies", response_model=list[Company])
-async def companies() -> list[Company]:
+async def companies(_user: User = Depends(current_user)) -> list[Company]:
     return await list_companies()
 
 
+# Documents are Analyst-only: uploaded files aren't classified, and some (like the
+# investment memo) quote deal figures, so a Viewer could otherwise read deal data
+# through a summary.
 @app.post("/documents/upload", response_model=DocumentInfo, status_code=201)
 async def upload_document(
     request: Request,
     file: UploadFile = File(..., description="PDF or Excel (.xlsx), at most 10 MB"),
     company_code: str | None = Form(None, description="Optional company link, e.g. CO-048"),
+    _user: User = Depends(analyst_only),
 ) -> DocumentInfo:
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES + 1024 * 1024:
@@ -393,25 +501,26 @@ async def upload_document(
 
 
 @app.get("/documents", response_model=list[DocumentInfo])
-async def list_documents() -> list[DocumentInfo]:
+async def list_documents(_user: User = Depends(analyst_only)) -> list[DocumentInfo]:
     return [DocumentInfo(**d) for d in await in_store(lambda store: store.list())]
 
 
 @app.post("/documents/{document_id}/summarize", response_model=DocumentSummaryResponse)
-async def summarize_document(document_id: str) -> DocumentSummaryResponse:
+async def summarize_document(document_id: str, user: User = Depends(analyst_only)) -> DocumentSummaryResponse:
     doc: Document = await in_store(lambda store: store.get(document_id))
     summary, _, duration_ms = await timed_and_logged(
-        f"[summarize document] {doc.filename}", lambda: summarize_with_claude(doc))
+        f"[summarize document] {doc.filename}", user, lambda: summarize_with_claude(doc))
     return DocumentSummaryResponse(document_id=doc.id, filename=doc.filename, summary=summary,
                                    duration_ms=duration_ms)
 
 
 @app.post("/companies/{company_code}/one-page-summary", response_model=OnePageSummaryResponse)
-async def one_page_summary(company_code: str) -> OnePageSummaryResponse:
+async def one_page_summary(company_code: str, user: User = Depends(analyst_only)) -> OnePageSummaryResponse:
     company = await get_company(company_code)
     docs: list[Document] = await in_store(lambda store: store.for_company(company.company_code))
     summary, tools_used, duration_ms = await timed_and_logged(
-        f"[one-page summary] {company.company_code}", lambda: one_pager_with_claude(company, docs))
+        f"[one-page summary] {company.company_code}", user,
+        lambda: one_pager_with_claude(company, docs, user.role))
     return OnePageSummaryResponse(
         company_code=company.company_code, company_name=company.name, summary=summary,
         documents_used=[d.filename for d in docs], tools_used=tools_used, duration_ms=duration_ms,
@@ -426,4 +535,5 @@ async def health() -> dict:
         "system_prompt_found": SYSTEM_PROMPT_PATH.is_file(),
         "mcp_server_found": MCP_SERVER_PATH.is_file(),
         "document_storage_configured": bool(os.getenv("AZURE_STORAGE_CONNECTION_STRING")),
+        "sign_in_configured": auth_configured(),
     }

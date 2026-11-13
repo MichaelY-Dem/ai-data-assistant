@@ -1,8 +1,15 @@
 """MCP server that lets Claude explore the portfolio MySQL database, read-only.
 
-It connects as the read-only account from .env (ASSISTANT_DB_USER /
-ASSISTANT_DB_PASSWORD, plus MYSQL_HOST, MYSQL_PORT and MYSQL_DATABASE) and
-exposes three tools: list_tables, describe_table and run_query.
+It exposes three tools: list_tables, describe_table and run_query, and runs for
+one role, given on the command line (--role analyst|viewer, default analyst):
+
+  analyst  connects as ASSISTANT_DB_USER (SELECT on the whole portfolio database)
+  viewer   connects as ASSISTANT_VIEWER_DB_USER (SELECT on every table except
+           deals; see data/roles.py and data/create_viewer_user.py)
+
+The backend starts one server per request with the signed-in user's role, so the
+role comes from the verified token, never from Claude. MYSQL_HOST, MYSQL_PORT and
+MYSQL_DATABASE come from .env as well.
 
 Safety comes in layers:
   1. The MySQL account itself only has SELECT on the portfolio database
@@ -11,20 +18,23 @@ Safety comes in layers:
      second statement, no write/DDL keywords (validate_select below).
   3. Each query runs inside a READ ONLY transaction that is always rolled back,
      with a server-side time limit, and at most MAX_ROWS rows are returned.
+  4. Tables restricted for the role are refused with a clear message before the
+     query runs; the Viewer MySQL account has no SELECT on them anyway.
 
 Run it over stdio (this is what the Claude desktop app does):
-    .venv\\Scripts\\python.exe mcp_server\\server.py
+    .venv\\Scripts\\python.exe mcp_server\\server.py [--role viewer]
 
 Note: stdout carries the MCP protocol, so this file must never print().
 """
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import decimal
 import re
 import sys
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 import pymysql
 from mcp.server.mcpserver import MCPServer
@@ -33,7 +43,11 @@ from mcp.types import ToolAnnotations
 
 # Reuse the project's .env loading and connection code from data/db_config.py.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "data"))
-from db_config import database_name, reader_connection, setting  # noqa: E402
+from db_config import database_name, reader_connection, setting, viewer_connection  # noqa: E402
+from roles import ANALYST, DB_ACCOUNT_SETTINGS, RESTRICTED_TABLES, ROLES, check_role  # noqa: E402
+
+# The role this server process runs for; set once from --role in main().
+ROLE = ANALYST
 
 MAX_ROWS = 200
 QUERY_TIMEOUT_MS = 15_000
@@ -122,6 +136,37 @@ def validate_select(sql: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Role restrictions
+# --------------------------------------------------------------------------- #
+
+def restricted_tables() -> frozenset[str]:
+    return RESTRICTED_TABLES[ROLE]
+
+
+def restricted_message(tables) -> str:
+    names = ", ".join(sorted(tables))
+    return (f"Access denied: the {names} data is restricted for the {ROLE.capitalize()} role. "
+            "Tell the user that this data is restricted for their role; don't guess it.")
+
+
+def check_tables_allowed(query: str) -> None:
+    """Refuse a query that names a table restricted for this role.
+
+    A courtesy check that gives Claude a clear message. The real enforcement is the
+    role's MySQL account, which has no SELECT on restricted tables at all.
+    """
+    blocked = restricted_tables()
+    if not blocked:
+        return
+    code = _strip_literals(query)  # string literals blanked: WHERE note = 'deals' is fine
+    names = {w.lower() for w in re.findall(r"[A-Za-z_][A-Za-z0-9_$]*", code)}
+    names |= {w.lower() for w in re.findall(r"`([^`]*)`", query)}  # `deals`, `portfolio`.`deals`
+    hit = names & blocked
+    if hit:
+        raise ToolError(restricted_message(hit))
+
+
+# --------------------------------------------------------------------------- #
 # Database helpers
 # --------------------------------------------------------------------------- #
 
@@ -144,7 +189,7 @@ def _fetch(sql: str, params: tuple = (), limit: int | None = None) -> tuple[list
     Returns (column names, rows, truncated). With a limit, fetches limit + 1 rows
     so we can tell whether more were available.
     """
-    conn = reader_connection()
+    conn = reader_connection() if ROLE == ANALYST else viewer_connection()
     try:
         with conn.cursor(pymysql.cursors.DictCursor) as cur:
             cur.execute(f"SET SESSION MAX_EXECUTION_TIME = {QUERY_TIMEOUT_MS}")
@@ -157,6 +202,8 @@ def _fetch(sql: str, params: tuple = (), limit: int | None = None) -> tuple[list
         return columns, [{k: _json_value(v) for k, v in r.items()} for r in rows], truncated
     except pymysql.err.MySQLError as exc:
         code, msg = (exc.args + ("",))[:2] if exc.args else ("?", str(exc))
+        if code in (1142, 1143) and restricted_tables():  # table / column access denied
+            raise ToolError(restricted_message(restricted_tables())) from None
         raise ToolError(f"MySQL error {code}: {msg}") from None
     finally:
         try:
@@ -171,11 +218,13 @@ def _table_names() -> list[str]:
         "WHERE TABLE_SCHEMA = %s ORDER BY TABLE_NAME",
         (database_name(),),
     )
-    return [r["name"] for r in rows]
+    # information_schema already hides tables the account has no grant on; filter anyway.
+    return [r["name"] for r in rows if r["name"].lower() not in restricted_tables()]
 
 
 class TableList(TypedDict):
     tables: list[str]
+    restricted_for_your_role: NotRequired[list[str]]
 
 
 class QueryResult(TypedDict):
@@ -202,7 +251,12 @@ def list_tables() -> TableList:
     # Wrapped in a dict on purpose: the MCP SDK turns a bare list return value into
     # one text block per item, which clients show run together ("assetscompanies...").
     # A dict becomes a single JSON text block with the names as separate array items.
-    return TableList(tables=_table_names())
+    result = TableList(tables=_table_names())
+    if restricted_tables():
+        # Tell Claude the table exists but is off limits, so it says "restricted for
+        # your role" rather than "there is no deal data".
+        result["restricted_for_your_role"] = sorted(restricted_tables())
+    return result
 
 
 @mcp.tool(
@@ -217,6 +271,9 @@ def list_tables() -> TableList:
     annotations=READ_ONLY,
 )
 def describe_table(table_name: str) -> list[dict]:
+    name = table_name.strip("` ").lower() if isinstance(table_name, str) else ""
+    if name in restricted_tables():
+        raise ToolError(restricted_message({name}))
     if table_name not in _table_names():
         raise ToolError(f"Unknown table {table_name!r}. Use list_tables to see the available tables.")
     _, rows, _ = _fetch(
@@ -246,14 +303,20 @@ def describe_table(table_name: str) -> list[dict]:
 )
 def run_query(sql: str) -> QueryResult:
     query = validate_select(sql)
+    check_tables_allowed(query)
     columns, rows, truncated = _fetch(query, limit=MAX_ROWS)
     return QueryResult(columns=columns, rows=rows, row_count=len(rows), truncated=truncated)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    global ROLE
+    parser = argparse.ArgumentParser(description="Read-only MCP server for the portfolio database.")
+    parser.add_argument("--role", choices=ROLES, default=ANALYST,
+                        help="whose access rules to apply (default: analyst)")
+    ROLE = check_role(parser.parse_args(argv).role)
+
     # Fail fast with a clear message (on stderr) if .env is incomplete.
-    for name in ("ASSISTANT_DB_USER", "ASSISTANT_DB_PASSWORD"):
-        setting(name)
+    setting(DB_ACCOUNT_SETTINGS[ROLE][1])  # the role's MySQL password
     database_name()
     mcp.run()  # stdio transport
 

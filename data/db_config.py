@@ -32,11 +32,12 @@ def database_name() -> str:
     return safe_identifier(setting("MYSQL_DATABASE", "portfolio"))
 
 
-def connect(user_var: str, password_var: str, database: str | None = None) -> pymysql.connections.Connection:
+def connect(user_var: str, password_var: str, database: str | None = None,
+            default_user: str | None = None) -> pymysql.connections.Connection:
     return pymysql.connect(
         host=setting("MYSQL_HOST", "localhost"),
         port=int(setting("MYSQL_PORT", "3306")),
-        user=setting(user_var),
+        user=setting(user_var, default_user),
         password=setting(password_var),
         database=database,
         charset="utf8mb4",
@@ -49,4 +50,11 @@ def admin_connection(database: str | None = None) -> pymysql.connections.Connect
 
 
 def reader_connection() -> pymysql.connections.Connection:
+    """Read-only account with SELECT on the whole portfolio database (Analyst role)."""
     return connect("ASSISTANT_DB_USER", "ASSISTANT_DB_PASSWORD", database_name())
+
+
+def viewer_connection() -> pymysql.connections.Connection:
+    """Read-only account with SELECT on every portfolio table except deals (Viewer role)."""
+    return connect("ASSISTANT_VIEWER_DB_USER", "ASSISTANT_VIEWER_DB_PASSWORD", database_name(),
+                   default_user="assistant_viewer")

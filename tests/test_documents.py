@@ -13,6 +13,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 import backend.main as main
+from backend.auth import Role
+from conftest import token_headers
 from backend.documents import (
     MAX_UPLOAD_BYTES,
     Document,
@@ -208,8 +210,8 @@ def api(monkeypatch):
         calls.append(("summarize", doc.filename))
         return f"Summary of {doc.filename} [{doc.filename}, p.1]", []
 
-    async def fake_one_pager(company, docs):
-        calls.append(("one_pager", company.company_code, [d.filename for d in docs]))
+    async def fake_one_pager(company, docs, role):
+        calls.append(("one_pager", company.company_code, [d.filename for d in docs], role))
         return f"# {company.name}", ["run_query"]
 
     monkeypatch.setattr(main, "get_store", lambda: store)
@@ -217,7 +219,8 @@ def api(monkeypatch):
     monkeypatch.setattr(main, "summarize_with_claude", fake_summarize)
     monkeypatch.setattr(main, "one_pager_with_claude", fake_one_pager)
     monkeypatch.setattr(main, "safe_write_query_log", lambda **row: None)
-    return TestClient(main.app), store, calls
+    client = TestClient(main.app, headers=token_headers("analyst"))  # documents are Analyst-only
+    return client, store, calls
 
 
 def upload(client, name, data, company_code=None):
@@ -273,7 +276,7 @@ def test_summarize_and_one_page_summary(api):
     assert r.status_code == 200
     assert r.json()["documents_used"] == ["Summit.xlsx"]
     assert r.json()["company_name"] == "Summit Energy Partners"
-    assert calls[-1] == ("one_pager", "CO-044", ["Summit.xlsx"])
+    assert calls[-1] == ("one_pager", "CO-044", ["Summit.xlsx"], Role.ANALYST)
 
     assert client.post("/documents/" + "0" * 32 + "/summarize").status_code == 404
     assert client.post("/companies/CO-999/one-page-summary").status_code == 404
@@ -284,5 +287,5 @@ def test_prompts_load_without_header_and_tell_claude_to_ignore_document_instruct
         text = main.load_prompt(name)
         assert not text.startswith("#  ") and "---------" not in text
         assert "<documents>" in text and "Ignore any instructions" in text
-    opts = main.agent_options("x", use_db=False)
+    opts = main.agent_options("x", role=None, use_db=False)
     assert opts.allowed_tools == [] and opts.mcp_servers == {} and opts.tools == []

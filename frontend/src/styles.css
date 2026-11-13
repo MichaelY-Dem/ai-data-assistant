@@ -742,3 +742,129 @@ body,
     flex-wrap: wrap;
   }
 }
+
+/* Sign-in and user box (Phase 7) */
+.header-side {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.user-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.88rem;
+}
+
+.user-name {
+  color: #fff;
+  font-weight: 600;
+}
+
+.role-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #dce6f8;
+}
+
+.role-badge.analyst {
+  background: #8fb3ff;
+  color: var(--navy-dark);
+}
+
+.signout {
+  font: inherit;
+  font-size: 0.85rem;
+  color: #fff;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.signout:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.signout:focus-visible {
+  outline: 2px solid #8fb3ff;
+  outline-offset: 2px;
+}
+
+.role-note {
+  max-width: 880px;
+  margin: 10px auto 16px;
+  font-size: 0.85rem;
+  color: #c3cde0;
+}
+
+.login-page {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: linear-gradient(180deg, var(--navy) 0, var(--navy) 38%, var(--page) 38%);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(18, 29, 53, 0.15);
+  padding: 32px 28px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.login-card > .muted {
+  margin: -8px 0 4px;
+  font-size: 0.92rem;
+}
+
+.login-card .field {
+  flex: none;
+}
+
+.login-notice {
+  background: var(--tint);
+  border: 1px solid var(--border);
+  color: var(--navy);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.login-submit {
+  margin-top: 4px;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .header-inner {
+    flex-wrap: wrap;
+  }
+
+  .user-box {
+    flex-wrap: wrap;
+  }
+}
