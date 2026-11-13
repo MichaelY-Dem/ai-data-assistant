@@ -52,3 +52,14 @@ def test_non_select_rejected(sql):
 ])
 def test_plain_selects_allowed(sql):
     assert server.validate_select(sql).lower().startswith("select")
+
+
+def test_list_tables_returns_separate_names(monkeypatch):
+    """Through MCP, the names must arrive as one JSON array, not one text block each."""
+    import json
+    names = ["assets", "companies", "deals", "financials", "quarterly_financials"]
+    monkeypatch.setattr(server, "_table_names", lambda: names)
+    result = anyio.run(server.mcp.call_tool, "list_tables", {})
+    assert len(result.content) == 1
+    assert json.loads(result.content[0].text) == {"tables": names}
+    assert result.structured_content == {"tables": names}

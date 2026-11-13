@@ -174,6 +174,10 @@ def _table_names() -> list[str]:
     return [r["name"] for r in rows]
 
 
+class TableList(TypedDict):
+    tables: list[str]
+
+
 class QueryResult(TypedDict):
     columns: list[str]
     rows: list[dict[str, Any]]
@@ -194,8 +198,11 @@ class QueryResult(TypedDict):
     ),
     annotations=READ_ONLY,
 )
-def list_tables() -> list[str]:
-    return _table_names()
+def list_tables() -> TableList:
+    # Wrapped in a dict on purpose: the MCP SDK turns a bare list return value into
+    # one text block per item, which clients show run together ("assetscompanies...").
+    # A dict becomes a single JSON text block with the names as separate array items.
+    return TableList(tables=_table_names())
 
 
 @mcp.tool(

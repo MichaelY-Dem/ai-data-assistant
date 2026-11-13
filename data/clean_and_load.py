@@ -10,7 +10,8 @@ Pipeline (every change is recorded in docs/data-cleaning.md):
   7. Drop rows still missing a required field
   8. Validate ranges and business rules (impossible -> NULL, suspicious -> warning)
   9. Write data/clean/*.csv and docs/data-cleaning.md
- 10. Create the `portfolio` database if needed, recreate the tables, insert everything
+ 10. Derive quarterly_financials (revenue, targets, EBITDA) from the clean annual financials
+ 11. Create the `portfolio` database if needed, recreate the tables, insert everything
 
 Usage:
     python data/clean_and_load.py              # clean + load into MySQL
@@ -27,6 +28,7 @@ from pathlib import Path
 from typing import Callable
 
 import cleaning_rules as cr
+import quarterly
 from reference import (ASSET_TYPE_TO_UNIT, CITY_TO_COUNTRY, COMPANY_STATUS_ALIASES,
                        COUNTRY_ALIASES, DEAL_STATUS_ALIASES, DEAL_TYPE_ALIASES,
                        SECTOR_ALIASES, SECTORS, SUBSECTOR_TO_SECTOR)
@@ -38,7 +40,8 @@ CLEAN_DIR = HERE / "clean"
 SCHEMA_PATH = HERE / "schema.sql"
 LOG_PATH = PROJECT_ROOT / "docs" / "data-cleaning.md"
 TODAY = date.today()
-TABLES = ["companies", "financials", "assets", "deals"]
+TABLES = ["companies", "financials", "assets", "deals"]  # the raw CSVs we clean
+QUARTERLY = "quarterly_financials"  # derived from clean financials, not cleaned from a CSV
 
 COLUMNS = {
     "companies": ["company_code", "name", "sector", "subsector", "country", "hq_city",
@@ -49,6 +52,7 @@ COLUMNS = {
                "capacity_unit", "commissioning_date", "book_value_musd"],
     "deals": ["company_code", "deal_type", "deal_date", "deal_value_musd", "equity_stake_pct",
               "counterparty", "status"],
+    QUARTERLY: quarterly.COLUMNS,
 }
 REQUIRED = {
     "companies": ["name", "sector", "status"],
@@ -419,6 +423,7 @@ def clean_all(raw: dict[str, list[dict]]) -> tuple[dict[str, list[dict]], Cleani
                     continue  # a stake doesn't apply to these deals, so blank is correct
                 if r[col] is None and not log.touched(table, r["_id"], col):
                     log.fix(table, r["_id"], col, "", None, R_BLANK)
+    clean[QUARTERLY] = quarterly.build_quarterly(companies, financials)
     return clean, log
 
 
@@ -566,7 +571,7 @@ def load_to_mysql(clean: dict[str, list[dict]]) -> dict[str, int]:
             cur.execute("SELECT company_code, company_id FROM companies")
             ids = dict(cur.fetchall())
 
-            for table in ("financials", "assets", "deals"):
+            for table in ("financials", "assets", "deals", QUARTERLY):
                 cols = [c for c in COLUMNS[table] if c != "company_code"]
                 cur.executemany(
                     f"INSERT INTO {table} (company_id, {', '.join(cols)}) "
@@ -576,7 +581,7 @@ def load_to_mysql(clean: dict[str, list[dict]]) -> dict[str, int]:
 
         counts = {}
         with conn.cursor() as cur:
-            for table in TABLES:
+            for table in [*TABLES, QUARTERLY]:
                 cur.execute(f"SELECT COUNT(*) FROM {table}")
                 counts[table] = cur.fetchone()[0]
         return counts
@@ -602,6 +607,7 @@ def main() -> None:
           f"{kinds['warning']} warnings -> {LOG_PATH.relative_to(PROJECT_ROOT)}")
     for t in TABLES:
         print(f"  {t:<11} {len(raw[t]):>4} raw -> {len(clean[t]):>4} clean")
+    print(f"  {QUARTERLY}: {len(clean[QUARTERLY])} rows derived from clean financials")
 
     if args.skip_load:
         print("Skipped MySQL load (--skip-load).")

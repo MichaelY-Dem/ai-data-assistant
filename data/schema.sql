@@ -3,6 +3,7 @@
 -- All money columns are in millions of US dollars (suffix _musd).
 -- Re-runnable: drops tables in child-to-parent order before recreating them.
 
+DROP TABLE IF EXISTS quarterly_financials;
 DROP TABLE IF EXISTS deals;
 DROP TABLE IF EXISTS assets;
 DROP TABLE IF EXISTS financials;
@@ -39,6 +40,24 @@ CREATE TABLE financials (
     PRIMARY KEY (financial_id),
     UNIQUE KEY uq_financials_company_year (company_id, fiscal_year),
     CONSTRAINT fk_financials_company FOREIGN KEY (company_id) REFERENCES companies (company_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Quarterly results vs budget, one row per company per fiscal year per quarter,
+-- Q1 2024 through Q3 2026 (the latest completed quarter).
+-- For 2024-2025 the four quarters of revenue_musd / ebitda_musd add up to the annual figures
+-- in financials. FY2026 is still open, so it has no annual row yet.
+CREATE TABLE quarterly_financials (
+    quarterly_financial_id INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    company_id             INT UNSIGNED  NOT NULL,
+    fiscal_year            SMALLINT UNSIGNED NOT NULL,
+    quarter                TINYINT UNSIGNED  NOT NULL COMMENT '1-4',
+    revenue_musd           DECIMAL(12,2) NULL COMMENT 'Actual revenue for the quarter',
+    revenue_target_musd    DECIMAL(12,2) NULL COMMENT 'Budgeted revenue for the quarter (actual below target = missed)',
+    ebitda_musd            DECIMAL(12,2) NULL COMMENT 'Can be negative',
+    PRIMARY KEY (quarterly_financial_id),
+    UNIQUE KEY uq_quarterly_company_year_quarter (company_id, fiscal_year, quarter),
+    CONSTRAINT fk_quarterly_company FOREIGN KEY (company_id) REFERENCES companies (company_id),
+    CONSTRAINT ck_quarterly_quarter CHECK (quarter BETWEEN 1 AND 4)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Physical infrastructure owned by each company.

@@ -54,3 +54,56 @@ def test_every_problem_is_logged(run):
                      "Number stored as text converted (USD millions)", "Unparseable value set to NULL",
                      "Out-of-range value set to NULL", "Missing value inferred from related field"):
         assert expected in rules
+
+
+def test_quarterly_financials(run):
+    """Every company-year in 2024-2025 has Q1-Q4, quarters add up to the annual
+    figures, and some companies miss their revenue target while others beat it."""
+    _, clean, _ = run
+    quarters = [q for q in clean["quarterly_financials"] if q["fiscal_year"] in (2024, 2025)]
+    annual = {(f["company_code"], f["fiscal_year"]): f
+              for f in clean["financials"] if f["fiscal_year"] in (2024, 2025)}
+    assert annual, "expected 2024-2025 financials"
+
+    by_year: dict = {}
+    for q in quarters:
+        by_year.setdefault((q["company_code"], q["fiscal_year"]), []).append(q)
+    assert set(by_year) == set(annual)
+
+    for key, rows in by_year.items():
+        assert sorted(r["quarter"] for r in rows) == [1, 2, 3, 4], key
+        for col in ("revenue_musd", "ebitda_musd"):
+            if annual[key][col] is None:
+                assert all(r[col] is None for r in rows), (key, col)
+            else:
+                assert round(sum(r[col] for r in rows), 2) == round(annual[key][col], 2), (key, col)
+
+    with_target = [q for q in quarters if q["revenue_target_musd"] is not None]
+    assert all(q["revenue_musd"] >= 0 and q["revenue_target_musd"] > 0 for q in with_target)
+    missed = {q["company_code"] for q in with_target if q["revenue_musd"] < q["revenue_target_musd"]}
+    beat = {q["company_code"] for q in with_target if q["revenue_musd"] > q["revenue_target_musd"]}
+    assert missed and beat and missed != beat
+    always_beat = {c for c in beat} - missed
+    always_missed = missed - beat
+    assert always_beat and always_missed
+
+
+def test_quarterly_2026_through_q3(run):
+    """FY2026 runs Q1-Q3 for active companies; in Q3 three energy companies miss target."""
+    _, clean, _ = run
+    rows = [q for q in clean["quarterly_financials"] if q["fiscal_year"] == 2026]
+    active = {c["company_code"] for c in clean["companies"] if c["status"] == "active"}
+    with_2025 = {f["company_code"] for f in clean["financials"] if f["fiscal_year"] == 2025}
+    assert {q["company_code"] for q in rows} == active & with_2025
+    assert {q["quarter"] for q in rows} == {1, 2, 3}
+    assert not any(f["fiscal_year"] == 2026 for f in clean["financials"])  # year not closed
+
+    sector = {c["company_code"]: c["sector"] for c in clean["companies"]}
+    q3_energy = [q for q in rows if q["quarter"] == 3 and sector[q["company_code"]] == "energy"
+                 and q["revenue_musd"] is not None]
+    assert len(q3_energy) > 3
+    gaps = [q["revenue_musd"] / q["revenue_target_musd"] - 1 for q in q3_energy]
+    misses = [g for g in gaps if g < 0]
+    assert len(misses) == 3
+    assert all(-0.12 < g < -0.02 for g in misses)            # clear but plausible misses
+    assert all(0.005 < g < 0.08 for g in gaps if g >= 0)     # the rest beat, modestly
