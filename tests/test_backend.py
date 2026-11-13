@@ -51,6 +51,22 @@ def test_chat_returns_answer_and_logs_who_asked(monkeypatch, analyst_headers):
     assert row["username"] == "ana" and row["user_role"] == "analyst"
 
 
+def test_chat_is_not_marked_as_eval_by_default(monkeypatch, analyst_headers):
+    client, logged = _client(monkeypatch)
+    client.post("/chat", json={"question": "How many companies?"}, headers=analyst_headers)
+    assert logged[0]["is_eval"] is False
+
+
+def test_eval_header_marks_the_log_row(monkeypatch, analyst_headers):
+    client, logged = _client(monkeypatch)
+    for value, expected in [("true", True), ("TRUE", True), ("1", True), ("false", False), ("", False)]:
+        r = client.post("/chat", json={"question": "Q"}, headers={**analyst_headers, "X-Eval-Run": value})
+        assert r.status_code == 200
+        assert logged[-1]["is_eval"] is expected, value
+    # the header only tags the log row: the question and role reach Claude unchanged
+    assert all(asked == ("Q", Role.ANALYST) for asked in client.asked)
+
+
 def test_chat_passes_the_viewer_role_from_the_token(monkeypatch, viewer_headers):
     client, logged = _client(monkeypatch)
     assert client.post("/chat", json={"question": "Deals?"}, headers=viewer_headers).status_code == 200

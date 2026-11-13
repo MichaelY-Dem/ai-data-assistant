@@ -7,8 +7,9 @@ Connects as the admin account from .env (MYSQL_ADMIN_USER / MYSQL_ADMIN_PASSWORD
      with the password QUERY_LOGGER_PASSWORD from .env,
   4. grants it INSERT on that one table and nothing else.
 
-Phase 7 added the username and user_role columns (who asked); rerunning the script
-adds them to an existing table.
+Phase 7 added the username and user_role columns (who asked), and Phase 8 the is_eval
+column (1 = an automated evaluation run, sent with the X-Eval-Run header); rerunning
+the script adds them to an existing table.
 
 The log lives in its own database on purpose: the read-only account Claude queries
 through (ASSISTANT_DB_USER) has SELECT on the whole portfolio database, so a log
@@ -24,7 +25,7 @@ from __future__ import annotations
 
 import pymysql
 
-from db_config import admin_connection, connect, safe_identifier, setting
+from db_config import admin_connection, connect, log_database, safe_identifier, setting
 
 HOST = "localhost"
 
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS query_log (
     status         VARCHAR(16)     NOT NULL COMMENT 'ok or error',
     username       VARCHAR(64)     NULL     COMMENT 'Signed-in user who asked',
     user_role      VARCHAR(16)     NULL     COMMENT 'analyst or viewer',
+    is_eval        TINYINT(1)      NOT NULL DEFAULT 0 COMMENT '1 = automated evaluation run (tests/eval)',
     PRIMARY KEY (id),
     KEY idx_query_log_asked_at (asked_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -49,11 +51,9 @@ CREATE TABLE IF NOT EXISTS query_log (
 ADDED_COLUMNS = [
     ("username", "VARCHAR(64) NULL COMMENT 'Signed-in user who asked'", "status"),
     ("user_role", "VARCHAR(16) NULL COMMENT 'analyst or viewer'", "username"),
+    ("is_eval", "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = automated evaluation run (tests/eval)'",
+     "user_role"),
 ]
-
-
-def log_database() -> str:
-    return safe_identifier(setting("QUERY_LOG_DATABASE", "assistant_logs"))
 
 
 def create_logger() -> None:
@@ -98,7 +98,8 @@ def verify_insert_only() -> None:
             # Test insert inside a transaction that is rolled back, so no test row is left behind.
             cur.execute(
                 "INSERT INTO query_log (asked_at, question, answer_length, tools_used, duration_ms, status, "
-                "username, user_role) VALUES (UTC_TIMESTAMP(3), 'setup check', 0, JSON_ARRAY(), 0, 'ok', NULL, NULL)"
+                "username, user_role, is_eval) VALUES (UTC_TIMESTAMP(3), 'setup check', 0, JSON_ARRAY(), 0, 'ok', "
+                "NULL, NULL, 0)"
             )
             conn.rollback()
             print("Check 1 passed: logger can INSERT into query_log.")

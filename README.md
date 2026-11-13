@@ -187,7 +187,6 @@ extraction, prompt escaping and the endpoints are in `tests/test_documents.py`:
 ```
 ### Document summaries with sources
 Uploaded reports are stored in Azure Blob Storage (developed locally with the Azurite emulator), and every claim cites its file and page.
-![Document summary with citations](docs/screenshots/document-summary.png)
 
 ### One-page investment summary
 Combines a company's database figures with its uploaded documents into a one-page summary, with sources cited.
@@ -295,3 +294,94 @@ Viewers can't see deal data. This is enforced in the backend and database permis
 ### Prompt injection defense
 A test document hides instructions to reveal the system prompt and delete data. Claude treats them as text and nothing changes. See [SECURITY.md](SECURITY.md).
 ![Prompt injection test](docs/screenshots/prompt-injection.png)
+## Accuracy evaluation and usage export (Phase 8)
+
+### Accuracy evaluation
+
+`tests/eval/questions.json` holds 25 questions about the portfolio, each with the SQL that computes
+its correct answer: 5 simple counts, 4 sector averages, 5 rankings, 5 quarterly target misses,
+4 deal-status questions, 1 question about data that doesn't exist (FY2019 revenue: Claude must
+say it isn't there) and 1 deal question asked as the Viewer (Claude must say it's restricted
+without leaking the figure).
+
+- `tests/eval/build_expected.py` runs each question's SQL as the read-only account and writes the
+  result into its `expected` field, so the expected answers always match the live database. It
+  stops with an error if a query returns nothing to check against.
+- `tests/eval/run_eval.py` recomputes the expected answers, signs in to the running backend, sends
+  each question to `POST /chat` (3 seconds apart, to stay under the 20-per-minute rate limit) and
+  grades the answers: numbers must appear within 0.051 or 0.05% (USD 51m for amounts written in
+  billions), names must be present, and in order for rankings. It prints a results table and the
+  overall score, and writes `docs/eval-results.md` with the date, the score by category and every
+  answer.
+
+Add the demo users' plain-text passwords to `.env` (the evaluation signs in like a user does):
+
+```
+EVAL_USERNAME=analyst
+EVAL_PASSWORD=<the Analyst's password>
+EVAL_VIEWER_USERNAME=viewer
+EVAL_VIEWER_PASSWORD=<the Viewer's password>
+```
+
+`EVAL_USERNAME` must be the Analyst. The Viewer pair is only for the restricted question; without
+it that question is skipped and left out of the score.
+
+With the backend running (see above), from the project root:
+
+```powershell
+# Optional: just recompute and print the expected answers
+.venv\Scripts\python.exe tests\eval\build_expected.py
+
+# The full run: 25 questions, typically 5 to 10 minutes
+.venv\Scripts\python.exe tests\eval\run_eval.py
+
+# A few questions only
+.venv\Scripts\python.exe tests\eval\run_eval.py --only Q15,Q24,Q25
+```
+
+The script exits with code 1 if any question fails. Every evaluation request carries the header
+`X-Eval-Run: true`, so its `query_log` row gets `is_eval = 1` and the usage export doesn't count it
+as time saved. (Once, after updating: rerun `data\create_logger_user.py` to add the `is_eval`
+column to an existing log table.)
+
+### Query log export
+
+`data/export_query_log.py` writes the whole `query_log` table to `data/exports/query_log.csv`, with
+the tools used as plain text, a `tool_count` column, `is_eval` (1 = an evaluation run) and an
+`estimated_minutes_saved` column. The CSV can be opened in any BI tool or spreadsheet.
+
+**Assumption: each successful question (status `ok`) saves 15 minutes** of looking up the figures
+by hand; failed requests and evaluation runs count 0. This is a planning estimate, not a
+measurement. It is stated in a comment on the first line of the CSV; change `MINUTES_PER_QUESTION`
+in the script to use your own figure. Evaluation rows stay in the file, so filter on
+`is_eval = 0` for real usage only. Skip the first line (the assumption comment) when importing.
+
+The export reads the log with its own read-only account, which has `SELECT` on `query_log` and
+nothing else (the backend's logger account can only insert). Set up once: add a new strong
+password to `.env`, then create the account. The script checks that it can read the log but can't
+change it or read the portfolio database:
+
+```
+QUERY_LOG_READER_USER=query_log_reader
+QUERY_LOG_READER_PASSWORD=<a new strong password>
+```
+
+```powershell
+.venv\Scripts\python.exe data\create_log_reader_user.py
+```
+
+Then export:
+
+```powershell
+.venv\Scripts\python.exe data\export_query_log.py
+```
+
+`asked_at` is in UTC. `data/exports/` is git-ignored because the log contains real questions and
+usernames.
+
+## Build vs. buy
+
+[docs/build-vs-buy.md](docs/build-vs-buy.md) compares this assistant with Microsoft 365 Copilot for
+an asset management team on cost, security, database access, accuracy, customization, time to
+deploy and vendor risk, using this project's test results. It recommends a hybrid: Copilot for
+everyday Microsoft 365 work and this tool for portfolio data.

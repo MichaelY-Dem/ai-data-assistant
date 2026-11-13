@@ -1,0 +1,351 @@
+{
+  "about": "Accuracy evaluation set. Each question has the SQL that computes its correct answer. Run tests/eval/build_expected.py to fill in every 'expected' value from MySQL (run_eval.py does this automatically before each run). Check types: number = the answer must contain this number; numbers = every number; names = every name; names_numbers = every name and every number; no_data = the answer must say the data isn't available; restricted = asked as the Viewer, the answer must say the data is restricted and must not leak any expected number. 'ordered' = the names must first appear in this order. Tolerance: a number matches if it is within max(abs_tol, rel_tol x expected).",
+  "questions": [
+    {
+      "id": "Q01",
+      "category": "count",
+      "question": "How many portfolio companies are in the database in total, including exited ones?",
+      "check": "number",
+      "sql": "SELECT COUNT(*) FROM companies",
+      "expected": {
+        "numbers": [
+          50
+        ]
+      }
+    },
+    {
+      "id": "Q02",
+      "category": "count",
+      "question": "How many active companies are in the data centers sector?",
+      "check": "number",
+      "sql": "SELECT COUNT(*) FROM companies WHERE sector = 'data_centers' AND status = 'active'",
+      "expected": {
+        "numbers": [
+          10
+        ]
+      }
+    },
+    {
+      "id": "Q03",
+      "category": "count",
+      "question": "How many portfolio companies have we exited?",
+      "check": "number",
+      "sql": "SELECT COUNT(*) FROM companies WHERE status = 'exited'",
+      "expected": {
+        "numbers": [
+          11
+        ]
+      }
+    },
+    {
+      "id": "Q04",
+      "category": "count",
+      "question": "How many physical assets does the portfolio hold in total, across all companies?",
+      "check": "number",
+      "sql": "SELECT COUNT(*) FROM assets",
+      "expected": {
+        "numbers": [
+          129
+        ]
+      }
+    },
+    {
+      "id": "Q05",
+      "category": "count",
+      "question": "How many portfolio companies are based in Canada (company country)?",
+      "check": "number",
+      "sql": "SELECT COUNT(*) FROM companies WHERE country = 'Canada'",
+      "expected": {
+        "numbers": [
+          9
+        ]
+      }
+    },
+    {
+      "id": "Q06",
+      "category": "sector average",
+      "question": "What was the average FY2025 revenue of energy sector companies, in USD millions?",
+      "check": "number",
+      "sql": "SELECT AVG(f.revenue_musd) FROM financials f JOIN companies c ON c.company_id = f.company_id WHERE c.sector = 'energy' AND f.fiscal_year = 2025",
+      "expected": {
+        "numbers": [
+          454.5875
+        ]
+      }
+    },
+    {
+      "id": "Q07",
+      "category": "sector average",
+      "question": "What is our average ownership stake (%) in active toll road companies?",
+      "check": "number",
+      "sql": "SELECT AVG(ownership_pct) FROM companies WHERE sector = 'toll_roads' AND status = 'active'",
+      "expected": {
+        "numbers": [
+          77.6222
+        ]
+      }
+    },
+    {
+      "id": "Q08",
+      "category": "sector average",
+      "question": "What was the average FY2024 EBITDA per company in each sector, in USD millions? Show every sector.",
+      "check": "names_numbers",
+      "sql": "SELECT c.sector, AVG(f.ebitda_musd) FROM financials f JOIN companies c ON c.company_id = f.company_id WHERE f.fiscal_year = 2024 GROUP BY c.sector ORDER BY c.sector",
+      "expected": {
+        "names": [
+          "energy",
+          "data_centers",
+          "fiber",
+          "toll_roads",
+          "water"
+        ],
+        "numbers": [
+          315.72,
+          258.78,
+          115.9111,
+          304.6,
+          226.0444
+        ]
+      }
+    },
+    {
+      "id": "Q09",
+      "category": "sector average",
+      "question": "What is the average book value of the assets owned by data center companies, in USD millions per asset?",
+      "check": "number",
+      "sql": "SELECT AVG(a.book_value_musd) FROM assets a JOIN companies c ON c.company_id = a.company_id WHERE c.sector = 'data_centers'",
+      "expected": {
+        "numbers": [
+          897.94
+        ]
+      }
+    },
+    {
+      "id": "Q10",
+      "category": "ranking",
+      "question": "Which three companies had the highest revenue in FY2025, and how much revenue did each have?",
+      "check": "names_numbers",
+      "ordered": true,
+      "sql": "SELECT c.name, f.revenue_musd FROM financials f JOIN companies c ON c.company_id = f.company_id WHERE f.fiscal_year = 2025 AND f.revenue_musd IS NOT NULL ORDER BY f.revenue_musd DESC LIMIT 3",
+      "expected": {
+        "names": [
+          "Willow Datacenters Inc.",
+          "Sandstone Digital PLC",
+          "Hawthorn Cloud Inc."
+        ],
+        "numbers": [
+          1237.4,
+          1003.7,
+          950.5
+        ]
+      }
+    },
+    {
+      "id": "Q11",
+      "category": "ranking",
+      "question": "Which company had the highest EBITDA in FY2025, and what was it?",
+      "check": "names_numbers",
+      "sql": "SELECT c.name, f.ebitda_musd FROM financials f JOIN companies c ON c.company_id = f.company_id WHERE f.fiscal_year = 2025 AND f.ebitda_musd IS NOT NULL ORDER BY f.ebitda_musd DESC LIMIT 1",
+      "expected": {
+        "names": [
+          "Alder Power Group"
+        ],
+        "numbers": [
+          627.2
+        ]
+      }
+    },
+    {
+      "id": "Q12",
+      "category": "ranking",
+      "question": "Rank the top 5 companies by total installed asset capacity in MW.",
+      "check": "names",
+      "ordered": true,
+      "sql": "SELECT c.name, SUM(a.capacity_value) AS mw FROM assets a JOIN companies c ON c.company_id = a.company_id WHERE a.capacity_unit = 'MW' GROUP BY c.company_id, c.name ORDER BY mw DESC LIMIT 5",
+      "expected": {
+        "names": [
+          "Tidewater Wind Infrastructure",
+          "Glenmore Energy Inc.",
+          "Alder Power Group",
+          "Falcon Power Ltd",
+          "Bramble Energy Partners"
+        ]
+      }
+    },
+    {
+      "id": "Q13",
+      "category": "ranking",
+      "question": "Which sector had the highest total revenue in FY2025, and what was that total?",
+      "check": "names_numbers",
+      "sql": "SELECT c.sector, SUM(f.revenue_musd) AS total FROM financials f JOIN companies c ON c.company_id = f.company_id WHERE f.fiscal_year = 2025 GROUP BY c.sector ORDER BY total DESC LIMIT 1",
+      "expected": {
+        "names": [
+          "data_centers"
+        ],
+        "numbers": [
+          5809.7
+        ]
+      }
+    },
+    {
+      "id": "Q14",
+      "category": "ranking",
+      "question": "Which three companies had the highest net debt at the end of FY2025?",
+      "check": "names",
+      "ordered": true,
+      "sql": "SELECT c.name, f.net_debt_musd FROM financials f JOIN companies c ON c.company_id = f.company_id WHERE f.fiscal_year = 2025 AND f.net_debt_musd IS NOT NULL ORDER BY f.net_debt_musd DESC LIMIT 3",
+      "expected": {
+        "names": [
+          "Willow Datacenters Inc.",
+          "Hawthorn Cloud Inc.",
+          "Cascade Datacenters Ltd"
+        ]
+      }
+    },
+    {
+      "id": "Q15",
+      "category": "quarterly target miss",
+      "question": "Which energy companies missed their revenue target in Q3 2026?",
+      "check": "names",
+      "sql": "SELECT c.name FROM quarterly_financials q JOIN companies c ON c.company_id = q.company_id WHERE c.sector = 'energy' AND q.fiscal_year = 2026 AND q.quarter = 3 AND q.revenue_musd < q.revenue_target_musd ORDER BY c.name",
+      "expected": {
+        "names": [
+          "Alder Power Group",
+          "Summit Energy Partners",
+          "Vantage Renewables Inc."
+        ]
+      }
+    },
+    {
+      "id": "Q16",
+      "category": "quarterly target miss",
+      "question": "How many companies, across all sectors, missed their revenue target in Q3 2026?",
+      "check": "number",
+      "sql": "SELECT COUNT(*) FROM quarterly_financials WHERE fiscal_year = 2026 AND quarter = 3 AND revenue_musd < revenue_target_musd",
+      "expected": {
+        "numbers": [
+          16
+        ]
+      }
+    },
+    {
+      "id": "Q17",
+      "category": "quarterly target miss",
+      "question": "Which water companies missed their revenue target in all four quarters of 2025?",
+      "check": "names",
+      "sql": "SELECT c.name FROM quarterly_financials q JOIN companies c ON c.company_id = q.company_id WHERE c.sector = 'water' AND q.fiscal_year = 2025 GROUP BY c.company_id, c.name HAVING SUM(q.revenue_musd < q.revenue_target_musd) = 4 ORDER BY c.name",
+      "expected": {
+        "names": [
+          "Juniper Aqua PLC",
+          "Rosewood Aqua Ltd",
+          "Westbrook Water Services Partners"
+        ]
+      }
+    },
+    {
+      "id": "Q18",
+      "category": "quarterly target miss",
+      "question": "By how much did Alder Power Group miss its Q3 2026 revenue target, in USD millions (target minus actual)?",
+      "check": "number",
+      "sql": "SELECT q.revenue_target_musd - q.revenue_musd FROM quarterly_financials q JOIN companies c ON c.company_id = q.company_id WHERE c.name = 'Alder Power Group' AND q.fiscal_year = 2026 AND q.quarter = 3",
+      "expected": {
+        "numbers": [
+          22.67
+        ]
+      }
+    },
+    {
+      "id": "Q19",
+      "category": "quarterly target miss",
+      "question": "How many data center companies beat their revenue target in Q2 2026?",
+      "check": "number",
+      "sql": "SELECT COUNT(*) FROM quarterly_financials q JOIN companies c ON c.company_id = q.company_id WHERE c.sector = 'data_centers' AND q.fiscal_year = 2026 AND q.quarter = 2 AND q.revenue_musd > q.revenue_target_musd",
+      "expected": {
+        "numbers": [
+          9
+        ]
+      }
+    },
+    {
+      "id": "Q20",
+      "category": "deals by status",
+      "question": "How many deals are there in each status (closed, pending, terminated)?",
+      "check": "names_numbers",
+      "sql": "SELECT status, COUNT(*) FROM deals GROUP BY status ORDER BY status",
+      "expected": {
+        "names": [
+          "closed",
+          "pending",
+          "terminated"
+        ],
+        "numbers": [
+          132,
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "Q21",
+      "category": "deals by status",
+      "question": "What is the total disclosed value of all closed deals, in USD millions?",
+      "check": "number",
+      "sql": "SELECT SUM(deal_value_musd) FROM deals WHERE status = 'closed'",
+      "expected": {
+        "numbers": [
+          131035.1
+        ]
+      }
+    },
+    {
+      "id": "Q22",
+      "category": "deals by status",
+      "question": "Which companies have a pending deal right now?",
+      "check": "names",
+      "sql": "SELECT DISTINCT c.name FROM deals d JOIN companies c ON c.company_id = d.company_id WHERE d.status = 'pending' ORDER BY c.name",
+      "expected": {
+        "names": [
+          "Falcon Power Ltd",
+          "Kingsley Digital Inc.",
+          "Sterling Datacenters PLC"
+        ]
+      }
+    },
+    {
+      "id": "Q23",
+      "category": "deals by status",
+      "question": "How many deals were terminated, and what was their combined value in USD millions?",
+      "check": "numbers",
+      "sql": "SELECT COUNT(*), SUM(deal_value_musd) FROM deals WHERE status = 'terminated'",
+      "expected": {
+        "numbers": [
+          2,
+          531.0
+        ]
+      }
+    },
+    {
+      "id": "Q24",
+      "category": "missing data",
+      "question": "What was the total revenue of the portfolio in fiscal year 2019?",
+      "check": "no_data",
+      "sql": "SELECT COUNT(*) FROM financials WHERE fiscal_year = 2019",
+      "expected": {
+        "rows_found": 0
+      }
+    },
+    {
+      "id": "Q25",
+      "category": "viewer restricted",
+      "question": "What is the total value of all pending deals, in USD millions?",
+      "check": "restricted",
+      "as_role": "viewer",
+      "sql": "SELECT SUM(deal_value_musd) FROM deals WHERE status = 'pending'",
+      "expected": {
+        "must_not_contain": [
+          1002.3
+        ]
+      }
+    }
+  ]
+}

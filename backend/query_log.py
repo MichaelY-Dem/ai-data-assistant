@@ -15,7 +15,7 @@ log = logging.getLogger("backend.query_log")
 
 INSERT_SQL = (
     "INSERT INTO query_log (asked_at, question, answer_length, tools_used, duration_ms, status, "
-    "username, user_role) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+    "username, user_role, is_eval) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
 
 
@@ -29,6 +29,7 @@ def write_query_log(
     status: str,
     username: str | None = None,
     user_role: str | None = None,
+    is_eval: bool = False,
 ) -> None:
     """Insert one log row. Blocking: call it from a worker thread."""
     database = safe_identifier(setting("QUERY_LOG_DATABASE", "assistant_logs"))
@@ -44,6 +45,7 @@ def write_query_log(
                 status,
                 username,
                 user_role,
+                int(is_eval),
             ))
         conn.commit()
     finally:

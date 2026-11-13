@@ -233,3 +233,6 @@ frontend/dist/
 
 # Azurite (local Azure Storage emulator) data
 .azurite/
+
+# Exports for Power BI (data/export_query_log.py): real questions and usernames
+data/exports/

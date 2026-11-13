@@ -16,7 +16,9 @@ Endpoints:                                        who
     POST /login                                   anyone   {"username", "password"} -> token + user
     GET  /me                                      any role the signed-in user
     POST /chat                                    any role {"question": "..."} -> {"answer", "tools_used", "duration_ms"}
-                                                           rate limited to 20 per minute per user
+                                                           rate limited to 20 per minute per user;
+                                                           header X-Eval-Run: true marks the log row
+                                                           as an evaluation run (is_eval = 1)
     GET  /companies                               any role company codes and names, for pickers
     POST /documents/upload                        Analyst  multipart: file (PDF/.xlsx, max 10 MB), company_code (optional)
     GET  /documents                               Analyst  uploaded documents (metadata only)
@@ -41,7 +43,7 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 import anyio
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -367,9 +369,13 @@ async def one_pager_with_claude(company: Company, docs: list[Document], role: Ro
     return await run_agent(prompt, agent_options(system, role=role, use_db=True))
 
 
-async def timed_and_logged(label: str, user: User, call: Callable[[], Awaitable[tuple[str, list[str]]]]
-                           ) -> tuple[str, list[str], int]:
-    """Run a Claude call with a timeout, log it to query_log, map failures to HTTP errors."""
+async def timed_and_logged(label: str, user: User, call: Callable[[], Awaitable[tuple[str, list[str]]]],
+                           *, is_eval: bool = False) -> tuple[str, list[str], int]:
+    """Run a Claude call with a timeout, log it to query_log, map failures to HTTP errors.
+
+    is_eval marks the row as an automated evaluation run (tests/eval/run_eval.py), so usage
+    reports can leave it out.
+    """
     asked_at = dt.datetime.now(dt.timezone.utc)
     started = time.perf_counter()
     answer, tools_used, error = "", [], None
@@ -392,6 +398,7 @@ async def timed_and_logged(label: str, user: User, call: Callable[[], Awaitable[
         status="error" if error else "ok",
         username=user.username,
         user_role=user.role.value,
+        is_eval=is_eval,
     ))
 
     if error:
@@ -460,12 +467,15 @@ async def me(user: User = Depends(current_user)) -> User:
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, user: User = Depends(chat_user)) -> ChatResponse:
+async def chat(request: ChatRequest, user: User = Depends(chat_user),
+               x_eval_run: str | None = Header(default=None)) -> ChatResponse:
     question = request.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="question must not be blank")
+    # Only tags the log row for reporting; it changes nothing about how the question is answered.
+    is_eval = (x_eval_run or "").strip().lower() in ("true", "1", "yes")
     answer, tools_used, duration_ms = await timed_and_logged(
-        question, user, lambda: ask_claude(question, user.role))
+        question, user, lambda: ask_claude(question, user.role), is_eval=is_eval)
     return ChatResponse(answer=answer, tools_used=tools_used, duration_ms=duration_ms)
 
 

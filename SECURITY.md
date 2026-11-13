@@ -28,10 +28,12 @@ that works. All accounts can only connect from `localhost`.
 | `ASSISTANT_DB_USER` (`assistant_reader`) | `SELECT` on `portfolio.*` | MCP server for Analysts; company list | `data/create_reader_user.py` |
 | `ASSISTANT_VIEWER_DB_USER` (`assistant_viewer`) | `SELECT` on `companies`, `financials`, `quarterly_financials`, `assets` only | MCP server for Viewers | `data/create_viewer_user.py` |
 | `QUERY_LOGGER_USER` (`query_logger`) | `INSERT` on `assistant_logs.query_log` only, no `SELECT` | backend request log | `data/create_logger_user.py` |
+| `QUERY_LOG_READER_USER` (`query_log_reader`) | `SELECT` on `assistant_logs.query_log` only | query log export (CSV) | `data/create_log_reader_user.py` |
 
 Each setup script checks its own work after creating the account: the reader can `SELECT` but
 `DELETE` is refused; the viewer can read `companies` but `deals` and `DELETE` are refused; the
-logger can `INSERT` but `SELECT` is refused.
+logger can `INSERT` but `SELECT` is refused; the log reader can `SELECT` the log but `DELETE` and
+any read of the portfolio database are refused.
 
 The log lives in a separate database (`assistant_logs`). That way the reader account, which Claude
 queries through, can't see past questions.
@@ -210,7 +212,10 @@ cite their sources and why write access is blocked by the database itself, not b
 
 **`assistant_logs.query_log`** (one row per Claude request, written by the INSERT-only account):
 time (UTC), the question text (or `[summarize document] <file>` / `[one-page summary] <code>`),
-answer length, tools Claude called, duration, ok/error, **username and role**.
+answer length, tools Claude called, duration, ok/error, **username and role**, and `is_eval`
+(1 when the request carried the `X-Eval-Run: true` header that the accuracy evaluation sends).
+`is_eval` only labels the row for usage reports: any signed-in user could set the header, so it is
+not a security control, and it changes nothing about how the question is answered.
 
 **Backend log** (console): successful sign-ins (username, role, client address), failed sign-ins
 (username tried, client address), rate-limit hits, Claude and storage errors.

@@ -58,3 +58,13 @@ def viewer_connection() -> pymysql.connections.Connection:
     """Read-only account with SELECT on every portfolio table except deals (Viewer role)."""
     return connect("ASSISTANT_VIEWER_DB_USER", "ASSISTANT_VIEWER_DB_PASSWORD", database_name(),
                    default_user="assistant_viewer")
+
+
+def log_database() -> str:
+    return safe_identifier(setting("QUERY_LOG_DATABASE", "assistant_logs"))
+
+
+def log_reader_connection() -> pymysql.connections.Connection:
+    """Read-only account with SELECT on query_log and nothing else (usage export)."""
+    return connect("QUERY_LOG_READER_USER", "QUERY_LOG_READER_PASSWORD", log_database(),
+                   default_user="query_log_reader")
