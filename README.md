@@ -51,3 +51,35 @@ Start the server and open http://127.0.0.1:8000/docs:
 ```powershell
 .venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
+
+## Chat frontend (Phase 5)
+
+`frontend/` is a Vite + React single-page chat. Answers are rendered as Markdown (tables included,
+via `react-markdown` + `remark-gfm`), with the tools Claude used and the response time underneath.
+In development, Vite proxies `/chat` and `/health` to the backend on http://127.0.0.1:8000, so
+FastAPI needs no CORS settings.
+
+Install the packages once (needs Node.js 20.19+):
+
+```powershell
+cd frontend
+npm install
+```
+
+Run the backend and the frontend at the same time, each in its own PowerShell window, both
+started from the project root:
+
+```powershell
+# Window 1: backend
+.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+```powershell
+# Window 2: frontend
+npm --prefix frontend run dev
+```
+
+Then open http://localhost:5173. If the backend isn't running, the page says so instead of failing
+silently.
+
+![Portfolio Analyst Assistant chat screen](docs/screenshots/chat-ui.png)

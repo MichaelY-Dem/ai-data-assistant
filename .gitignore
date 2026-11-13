@@ -226,3 +226,7 @@ __marimo__/
 data/raw/*.csv
 data/clean/*.csv
 
+
+# Frontend (Vite + React)
+frontend/node_modules/
+frontend/dist/
