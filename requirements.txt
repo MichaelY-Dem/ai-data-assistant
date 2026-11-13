@@ -1,0 +1,13 @@
+# Fake data generation
+Faker==40.54.0
+
+# MySQL driver (pure Python) + cryptography, which MySQL 8's default
+# caching_sha2_password authentication needs
+PyMySQL==1.2.4
+cryptography==50.0.2
+
+# Loads settings from .env into environment variables
+python-dotenv==1.2.4
+
+# Tests
+pytest==9.2.0
