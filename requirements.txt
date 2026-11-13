@@ -14,3 +14,8 @@ pytest==9.2.0
 
 # MCP server (official Model Context Protocol Python SDK)
 mcp==2.3.0
+
+# Phase 4 backend: web API + Claude Agent SDK (signs in with `claude login`)
+fastapi==0.162.5
+uvicorn==0.54.0
+claude-agent-sdk==0.2.181

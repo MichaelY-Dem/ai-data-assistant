@@ -31,3 +31,23 @@ statements, and it connects as a read-only MySQL user, so there are two layers o
 
 ### Answering business questions from live data
 ![Energy companies that missed their revenue target](docs/screenshots/missed-targets.png)
+## Backend API (Phase 4)
+
+`backend/main.py` is a FastAPI app. `POST /chat` sends a question to Claude (Sonnet) through the
+Claude Agent SDK. Claude signs in with your `claude login` credentials, not an API key, and its only
+tools are the read-only MCP server in `mcp_server/server.py`. The system prompt is read from
+`prompts/system.md` on every request. Reusable question templates are in `prompts/`.
+
+Each request is logged to `assistant_logs.query_log` (time, question, answer length, tools used,
+duration, status) by an INSERT-only account. Set `QUERY_LOGGER_PASSWORD` in `.env`, then create the
+table and account once:
+
+```powershell
+.venv\Scripts\python.exe data\create_logger_user.py
+```
+
+Start the server and open http://127.0.0.1:8000/docs:
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
