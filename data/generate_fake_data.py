@@ -57,10 +57,52 @@ NAME_PREFIXES = [
 ]
 NAME_SUFFIXES = ["Holdings", "Partners", "Infrastructure", "Group", "Ltd", "Inc.", "LLC", "PLC"]
 
-REVENUE_RANGE = {"energy": (40, 600), "data_centers": (30, 900), "fiber": (20, 400),
-                 "toll_roads": (50, 700), "water": (60, 500)}
-EBITDA_MARGIN = {"energy": (0.55, 0.80), "data_centers": (0.35, 0.55), "fiber": (0.20, 0.60),
-                 "toll_roads": (0.60, 0.80), "water": (0.40, 0.60)}
+# Ranges the main random stream draws from. They are kept as they were when the dataset
+# was first generated, so the same seed still picks the same companies, profiles and
+# injected problems; each draw is then rescaled into the realistic ranges below.
+DRAW_REVENUE_RANGE = {"energy": (40, 600), "data_centers": (30, 900), "fiber": (20, 400),
+                      "toll_roads": (50, 700), "water": (60, 500)}
+DRAW_CAPACITY_RANGE = {"energy": (20, 800), "data_centers": (2, 300), "fiber": (50, 5000),
+                       "toll_roads": (5, 300), "water": (20, 1000)}
+DRAW_FIRST_COMMISSIONING_YEAR = 1995
+LAST_COMMISSIONING = date(2025, 12, 31)
+
+# Per-subsector economics, roughly in line with listed infrastructure peers:
+#   capacity     size of one asset (unit from reference.SECTORS)
+#   first_year   earliest plausible commissioning year for the technology at that scale
+#   revenue      USD m of annual revenue per unit of capacity
+#   build_cost   USD m to build one unit of capacity (drives book value)
+#   life         useful life in years (book value is depreciated over it)
+#   margin       EBITDA margin band for a mature company; nothing goes above ~60%
+SUBSECTOR_ECONOMICS = {
+    # energy (MW)
+    "Solar":           dict(capacity=(20, 350), first_year=2009, revenue=0.11, build_cost=1.0, life=30, margin=(0.48, 0.58)),
+    "Onshore wind":    dict(capacity=(30, 450), first_year=2000, revenue=0.16, build_cost=1.4, life=25, margin=(0.48, 0.58)),
+    "Offshore wind":   dict(capacity=(150, 1000), first_year=2010, revenue=0.38, build_cost=3.8, life=25, margin=(0.46, 0.58)),
+    "Battery storage": dict(capacity=(20, 300), first_year=2016, revenue=0.13, build_cost=0.9, life=15, margin=(0.30, 0.45)),
+    # data centers (MW of IT load)
+    "Hyperscale":      dict(capacity=(30, 220), first_year=2010, revenue=2.0, build_cost=10.0, life=25, margin=(0.40, 0.52)),
+    "Colocation":      dict(capacity=(4, 50), first_year=2000, revenue=3.0, build_cost=12.0, life=25, margin=(0.35, 0.47)),
+    "Edge":            dict(capacity=(0.5, 6), first_year=2018, revenue=3.5, build_cost=14.0, life=15, margin=(0.22, 0.35)),
+    # fiber (route km)
+    "FTTH":            dict(capacity=(1000, 9000), first_year=2008, revenue=0.015, build_cost=0.08, life=30, margin=(0.30, 0.50)),
+    "Long-haul":       dict(capacity=(400, 5000), first_year=1996, revenue=0.012, build_cost=0.04, life=30, margin=(0.30, 0.48)),
+    "Metro":           dict(capacity=(40, 600), first_year=1997, revenue=0.15, build_cost=0.35, life=30, margin=(0.32, 0.50)),
+    # toll roads (km)
+    "Toll road":       dict(capacity=(20, 220), first_year=1975, revenue=2.5, build_cost=22.0, life=50, margin=(0.50, 0.58)),
+    "Bridge & tunnel": dict(capacity=(1, 12), first_year=1970, revenue=40.0, build_cost=250.0, life=60, margin=(0.50, 0.58)),
+    # water (ML/day)
+    "Water treatment": dict(capacity=(50, 700), first_year=1975, revenue=0.6, build_cost=1.3, life=50, margin=(0.38, 0.50)),
+    "Desalination":    dict(capacity=(50, 500), first_year=2003, revenue=1.1, build_cost=2.6, life=30, margin=(0.35, 0.45)),
+    "Wastewater":      dict(capacity=(50, 800), first_year=1975, revenue=0.5, build_cost=1.5, life=50, margin=(0.35, 0.48)),
+}
+MAX_MARGIN = 0.585
+CAPEX_TO_REVENUE = {"energy": (0.10, 0.35), "data_centers": (0.35, 0.90), "fiber": (0.30, 0.80),
+                    "toll_roads": (0.05, 0.20), "water": (0.25, 0.45)}
+NET_DEBT_TO_EBITDA = {"energy": (5.0, 7.5), "data_centers": (4.0, 6.5), "fiber": (4.5, 7.0),
+                      "toll_roads": (6.0, 8.5), "water": (5.5, 8.0)}
+EV_TO_EBITDA = {"energy": (11, 14), "data_centers": (18, 24), "fiber": (14, 19),
+                "toll_roads": (15, 20), "water": (13, 17)}
 
 # Spellings the "source systems" use instead of our canonical values
 SECTOR_VARIANTS = {
@@ -96,12 +138,27 @@ def rand_date(rng: random.Random, start: date, end: date) -> date:
     return start + timedelta(days=rng.randint(0, max(0, (end - start).days)))
 
 
+def rescale(x: float, lo: float, hi: float, new_lo: float, new_hi: float) -> float:
+    """Map x from [lo, hi] onto [new_lo, new_hi] linearly."""
+    return new_lo + (x - lo) / (hi - lo) * (new_hi - new_lo) if hi > lo else new_lo
+
+
+def rescale_date(d: date, lo: date, hi: date, new_lo: date, new_hi: date) -> date:
+    span = (hi - lo).days
+    frac = (d - lo).days / span if span else 0.0
+    return new_lo + timedelta(days=round(frac * max(0, (new_hi - new_lo).days)))
+
+
 # ---------------------------------------------------------------------------
 # 1. Truth data
 # ---------------------------------------------------------------------------
 
-def build_truth(rng: random.Random, fake: Faker) -> dict[str, list[dict]]:
+def build_truth(rng: random.Random, fake: Faker, seed: int = 42) -> dict[str, list[dict]]:
+    """Every call on `rng` happens in the same order as in the original generator, so a seed
+    keeps its companies, profiles and injected problems. The realism parameters (margin,
+    leverage, valuation multiple) come from a separate per-company stream."""
     companies, financials, assets, deals = [], [], [], []
+    valuation: dict[str, dict] = {}  # per company, for the live and failed deals at the end
     sectors = [s for s in SECTORS for _ in range(N_COMPANIES // len(SECTORS))]
     rng.shuffle(sectors)
     prefixes = rng.sample(NAME_PREFIXES, N_COMPANIES)
@@ -114,7 +171,9 @@ def build_truth(rng: random.Random, fake: Faker) -> dict[str, list[dict]]:
     for i, (prefix, sector) in enumerate(zip(prefixes, sectors), start=1):
         info = SECTORS[sector]
         code = f"CO-{i:03d}"
+        side = random.Random(f"{seed}:{code}")  # side stream: doesn't disturb rng
         subsector = rng.choice(list(info["subsectors"]))
+        econ = SUBSECTOR_ECONOMICS[subsector]
         country = rng.choice(list(COUNTRIES))
         hq_city = rng.choice(COUNTRIES[country])
         founded = rng.randint(1965, 2016)
@@ -131,29 +190,26 @@ def build_truth(rng: random.Random, fake: Faker) -> dict[str, list[dict]]:
             "status": "exited" if exited else "active",
         })
 
-        # Financials: one row per fiscal year we owned it
+        # Financial draws, one row per fiscal year we owned it. The rows are built after
+        # the assets, because installed capacity sets the size of the business.
         first = max(FIRST_FY, acquired.year)
         last = exit_date.year if exit_date else LAST_FY
         first = min(first, last)
-        revenue = rng.uniform(*REVENUE_RANGE[sector])
+        size_draw = rng.uniform(*DRAW_REVENUE_RANGE[sector])
         growth = rng.uniform(-0.03, 0.15)
         loss_making = sector == "fiber" and rng.random() < 0.4
+        year_draws = []
         for year in range(first, last + 1):
-            revenue *= 1 + growth
-            margin = rng.uniform(*EBITDA_MARGIN[sector])
-            if loss_making and year < first + 2:
-                margin = rng.uniform(-0.15, -0.02)  # fibre build-out years lose money
-            rev = round(revenue, 1)
-            financials.append({
-                "company_code": code, "fiscal_year": year, "revenue_musd": rev,
-                "ebitda_musd": round(rev * margin, 1),
-                "net_debt_musd": round(rev * rng.uniform(3, 8), 1),
-                "capex_musd": round(rev * rng.uniform(0.1, 0.5), 1),
-            })
+            margin_noise = rng.uniform(-0.02, 0.02)
+            loss_margin = rng.uniform(-0.15, -0.02) if loss_making and year < first + 2 else None
+            debt_noise = rng.uniform(-0.06, 0.06)
+            capex_ratio = rng.uniform(*CAPEX_TO_REVENUE[sector])
+            year_draws.append((year, margin_noise, loss_margin, debt_noise, capex_ratio))
 
         # Assets
         asset_type = info["subsectors"][subsector]
         names_used: set[str] = set()
+        total_capacity = 0.0
         for _ in range(rng.randint(1, 4)):
             city = hq_city if rng.random() < 0.6 else rng.choice(COUNTRIES[country])
             name = f"{city} {asset_type}"
@@ -162,34 +218,76 @@ def build_truth(rng: random.Random, fake: Faker) -> dict[str, list[dict]]:
                 name = f"{city} {asset_type} {'I' * n}"
                 n += 1
             names_used.add(name)
-            lo, hi = info["capacity_range"]
-            cap = round(rng.uniform(lo, hi), 1) if info["unit"] == "MW" else rng.randint(lo, hi)
+            lo, hi = DRAW_CAPACITY_RANGE[sector]
+            raw_cap = rng.uniform(lo, hi) if info["unit"] == "MW" else rng.randint(lo, hi)
+            cap = rescale(raw_cap, lo, hi, *econ["capacity"])
+            cap = round(cap, 1) if info["unit"] == "MW" else int(round(cap))
+            # Not before the company existed, nor before the technology was built at this scale
+            draw_start = date(max(founded, DRAW_FIRST_COMMISSIONING_YEAR), 1, 1)
+            raw_cod = rand_date(rng, draw_start, LAST_COMMISSIONING)
+            start = date(min(max(founded, econ["first_year"]), LAST_COMMISSIONING.year), 1, 1)
+            cod = rescale_date(raw_cod, draw_start, LAST_COMMISSIONING, start, LAST_COMMISSIONING)
+            remaining_life = max(0.3, 1 - (LAST_COMMISSIONING.year - cod.year) / econ["life"])
+            book = cap * econ["build_cost"] * remaining_life * rng.uniform(0.85, 1.15)
+            total_capacity += cap
             assets.append({
                 "company_code": code, "asset_name": name, "asset_type": asset_type,
                 "country": country, "city": city, "capacity_value": cap,
-                "capacity_unit": info["unit"],
-                "commissioning_date": rand_date(rng, date(max(founded, 1995), 1, 1), date(2025, 12, 31)),
-                "book_value_musd": round(rng.uniform(30, 1500), 1),
+                "capacity_unit": info["unit"], "commissioning_date": cod,
+                "book_value_musd": round(book, 1),
             })
 
-        # Deals
-        entry_value = round(rng.uniform(150, 3000), 1)
+        # Financials: revenue in the last year owned follows installed capacity, earlier
+        # years are discounted back at the company's growth rate.
+        base_margin = side.uniform(*econ["margin"])
+        leverage = side.uniform(*NET_DEBT_TO_EBITDA[sector])    # net debt / EBITDA
+        multiple = side.uniform(*EV_TO_EBITDA[sector])          # enterprise value / EBITDA
+        last_revenue = (total_capacity * econ["revenue"]
+                        * rescale(size_draw, *DRAW_REVENUE_RANGE[sector], 0.85, 1.15))
+
+        def revenue_in(year: int) -> float:
+            return last_revenue / (1 + growth) ** (last - year)
+
+        for year, margin_noise, loss_margin, debt_noise, capex_ratio in year_draws:
+            rev = round(revenue_in(year), 1)
+            if loss_margin is not None:      # fibre build-out years lose money
+                margin, capex_ratio = loss_margin, capex_ratio * 1.6
+            elif loss_making and year < first + 4:  # then ramp up to a mature margin
+                margin = base_margin * (0.6 if year < first + 3 else 0.85) + margin_noise
+            else:
+                margin = min(base_margin + margin_noise, MAX_MARGIN)
+            financials.append({
+                "company_code": code, "fiscal_year": year, "revenue_musd": rev,
+                "ebitda_musd": round(rev * margin, 1),
+                "net_debt_musd": round(rev * base_margin * leverage * (1 + debt_noise), 1),
+                "capex_musd": round(rev * capex_ratio, 1),
+            })
+
+        # Deals, valued from EBITDA: equity value = (EV - net debt) x stake
+        def equity_value(year: int) -> float:  # 100% of the equity
+            return revenue_in(year) * base_margin * (multiple - leverage)
+
+        ebitda_now = last_revenue * base_margin
+        valuation[code] = {"equity": equity_value(last), "ownership": ownership}
+        entry_value = round(max(equity_value(acquired.year) * ownership / 100
+                                * rng.uniform(0.95, 1.05), 5.0), 1)
         deals.append({"company_code": code, "deal_type": "acquisition", "deal_date": acquired,
                       "deal_value_musd": entry_value, "equity_stake_pct": ownership,
                       "counterparty": counterparty("seller"), "status": "closed"})
         window_end = (exit_date - timedelta(days=30)) if exit_date else AS_OF
         window_start = acquired + timedelta(days=60)
         if window_start < window_end:
-            for _ in range(rng.randint(0, 2)):
+            for _ in range(rng.randint(0, 2)):  # expansion equity, pro rata to our stake
                 deals.append({"company_code": code, "deal_type": "follow_on",
                               "deal_date": rand_date(rng, window_start, window_end),
-                              "deal_value_musd": round(rng.uniform(20, 400), 1),
+                              "deal_value_musd": round(max(ebitda_now * rng.uniform(0.2, 1.0)
+                                                           * ownership / 100, 2.0), 1),
                               "equity_stake_pct": None, "counterparty": counterparty("seller"),
                               "status": "closed"})
-            if rng.random() < 0.4:
+            if rng.random() < 0.4:  # refinances most of the company's debt
                 deals.append({"company_code": code, "deal_type": "refinancing",
                               "deal_date": rand_date(rng, window_start, window_end),
-                              "deal_value_musd": round(rng.uniform(100, 1500), 1),
+                              "deal_value_musd": round(ebitda_now * leverage * rng.uniform(0.4, 1.0), 1),
                               "equity_stake_pct": None, "counterparty": counterparty("bank"),
                               "status": "closed"})
         if exit_date:
@@ -200,16 +298,24 @@ def build_truth(rng: random.Random, fake: Faker) -> dict[str, list[dict]]:
 
     # A few live and failed deals
     active = [c for c in companies if c["status"] == "active"]
-    for c in rng.sample(active, 3):
+    for c in rng.sample(active, 3):  # sell part of our holding at a small premium
+        v = valuation[c["company_code"]]
+        deal_date = rand_date(rng, date(2026, 7, 1), date(2026, 10, 31))
+        premium = rng.uniform(1.0, 1.2)
+        stake = round(v["ownership"] * rng.uniform(0.2, 0.5), 1)  # never more than we own
         deals.append({"company_code": c["company_code"], "deal_type": "partial_exit",
-                      "deal_date": rand_date(rng, date(2026, 7, 1), date(2026, 10, 31)),
-                      "deal_value_musd": round(rng.uniform(100, 900), 1),
-                      "equity_stake_pct": round(rng.uniform(10, 40), 1),
+                      "deal_date": deal_date,
+                      "deal_value_musd": round(v["equity"] * stake / 100 * premium, 1),
+                      "equity_stake_pct": stake,
                       "counterparty": counterparty("seller"), "status": "pending"})
     for c in rng.sample(active, 2):
+        v = valuation[c["company_code"]]
+        deal_date = rand_date(rng, date(2023, 1, 1), date(2025, 12, 31))
         deals.append({"company_code": c["company_code"], "deal_type": "follow_on",
-                      "deal_date": rand_date(rng, date(2023, 1, 1), date(2025, 12, 31)),
-                      "deal_value_musd": round(rng.uniform(50, 300), 1), "equity_stake_pct": None,
+                      "deal_date": deal_date,
+                      "deal_value_musd": round(max(v["equity"] * v["ownership"] / 100
+                                                   * rng.uniform(0.05, 0.15), 2.0), 1),
+                      "equity_stake_pct": None,
                       "counterparty": counterparty("seller"), "status": "terminated"})
 
     return {"companies": companies, "financials": financials, "assets": assets, "deals": deals}
@@ -439,7 +545,7 @@ def generate(seed: int = 42) -> tuple[dict[str, list[dict]], dict[str, list[dict
     rng = random.Random(seed)
     fake = Faker()
     fake.seed_instance(seed)
-    truth = build_truth(rng, fake)
+    truth = build_truth(rng, fake, seed)
     raw = render_raw(truth, rng)
     inject_problems(raw, rng)
     return truth, raw

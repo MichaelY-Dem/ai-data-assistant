@@ -73,7 +73,7 @@ def build_quarterly(companies: list[dict], financials: list[dict], seed: int = 4
         if ebitda is None:
             q_ebitda = [None] * 4
         else:  # roughly follows revenue, with quarter-to-quarter margin wobble
-            e_noisy = [w * rng.uniform(0.9, 1.1) for w in weights]
+            e_noisy = [w * rng.uniform(0.97, 1.03) for w in weights]
             q_ebitda = _split(ebitda, [w / sum(e_noisy) for w in e_noisy])
 
         lo, hi = PROFILE_VARIANCE[profile[code]]
@@ -117,7 +117,7 @@ def _current_year(sector: dict, profile: dict, active: set[str], financials: lis
         lo, hi = PROFILE_VARIANCE[profile[code]]
         for q in range(LAST_QUARTER):
             q_rev = round(revenue * (1 + growth) * weights[q], 2) if revenue is not None else None
-            q_ebitda = round(q_rev * margin * rng.uniform(0.92, 1.08), 2) if margin is not None and q_rev is not None else None
+            q_ebitda = round(q_rev * margin * rng.uniform(0.96, 1.04), 2) if margin is not None and q_rev is not None else None
             target = None
             if q_rev is not None:
                 if q + 1 == LAST_QUARTER and sector[code] == "energy":

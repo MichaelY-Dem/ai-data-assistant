@@ -154,7 +154,8 @@ def alder_report(path: Path) -> None:
     previous = [q for q in c["quarters"] if (q["fiscal_year"], q["quarter"]) < (2026, 3)]
     n_missed = sum(q["revenue_musd"] < q["revenue_target_musd"] for q in previous)
     earlier_misses = (
-        f"This is the first quarterly revenue miss since Q{previous[0]['quarter']} {previous[0]['fiscal_year']}."
+        f"This is the first quarterly revenue miss since quarterly reporting began in "
+        f"Q{previous[0]['quarter']} {previous[0]['fiscal_year']}."
         if n_missed == 0 else f"{n_missed} of the previous {len(previous)} quarters also missed target.")
 
     # Invented variance bridge that adds up exactly to the database miss.
@@ -167,6 +168,17 @@ def alder_report(path: Path) -> None:
     delayed_cod = d(delayed["commissioning_date"]) if delayed else "2027"
     total_mw = sum(a["capacity_value"] or 0 for a in c["assets"])
     operating_mw = total_mw - (delayed["capacity_value"] if delayed else 0)
+
+    # Q4 2026 outlook, consistent with the year so far (invented, but derived from the data):
+    # the budget kept the step-up it assumed for Q3; guidance follows the YTD growth trend,
+    # trimmed for the lower price spreads.
+    q4_ly = quarter(c, 2025, 4)
+    ytd_ly = sum(quarter(c, 2025, q)["revenue_musd"] for q in (1, 2, 3))
+    ytd_growth = ytd / ytd_ly - 1
+    q4_budget = round(q4_ly["revenue_musd"] * q3["revenue_target_musd"] / q3_ly["revenue_musd"], 1)
+    q4_guidance = round(q4_ly["revenue_musd"] * (1 + ytd_growth) * 0.97, 1)
+    fy_guidance, fy_budget = ytd + q4_guidance, ytd_target + q4_budget
+    fy_vs_budget = (fy_guidance / fy_budget - 1) * 100
 
     story = [
         Paragraph("Alder Power Group", H1),
@@ -181,7 +193,9 @@ def alder_report(path: Path) -> None:
         Paragraph(
             f"EBITDA was {m(q3['ebitda_musd'], 2)}, an EBITDA margin of {margin:.1f}%. Year to date, revenue of "
             f"{m(ytd, 2)} is {m(ytd - ytd_target, 2)} {'ahead of' if ytd >= ytd_target else 'behind'} the year-to-date "
-            f"target of {m(ytd_target, 2)}, because Q1 and Q2 were ahead of budget.", BODY),
+            f"target of {m(ytd_target, 2)}"
+            + (", because Q1 and Q2 were ahead of budget." if q1["revenue_musd"] >= q1["revenue_target_musd"]
+               and q2["revenue_musd"] >= q2["revenue_target_musd"] else "."), BODY),
         table([
             ["Metric", "Q3 2026 actual", "Q3 2026 target", "Variance", "Q3 2025 actual"],
             ["Revenue", m(q3["revenue_musd"], 2), m(q3["revenue_target_musd"], 2),
@@ -236,8 +250,11 @@ def alder_report(path: Path) -> None:
         *bullets([
             "A second transformer supplier has been contracted; weekly commissioning reports now go to the board.",
             "Merchant exposure is being reduced: two new fixed-price grid-services contracts start in Q1 2027.",
-            f"Management expects Q4 2026 revenue of about {m(q3_ly['revenue_musd'] * 0.78, 1)} (management guidance, "
-            f"unaudited), which would leave full-year 2026 revenue slightly below budget.",
+            f"Management expects Q4 2026 revenue of about {m(q4_guidance)} (management guidance, unaudited), "
+            f"{(q4_guidance / q4_ly['revenue_musd'] - 1) * 100:.1f}% above Q4 2025 ({m(q4_ly['revenue_musd'], 2)}) "
+            f"but below the Q4 budget of {m(q4_budget)}, which assumed the delayed facility would be running. "
+            f"Full-year 2026 revenue would then be about {m(fy_guidance)}, {abs(fy_vs_budget):.1f}% "
+            f"{'below' if fy_vs_budget < 0 else 'above'} the full-year budget of {m(fy_budget)}.",
             "The FY2027 budget will use lower price-spread assumptions and a later start date for new capacity.",
         ]),
         Paragraph("7. Shareholders", H2),
@@ -267,7 +284,10 @@ def ironbridge_memo(path: Path) -> None:
     book = sum(a["book_value_musd"] or 0 for a in c["assets"])
     missing_cap = [a["asset_name"] for a in c["assets"] if a["capacity_value"] is None]
     leverage = fy25["net_debt_musd"] / fy25["ebitda_musd"]
-    proposal = 310.0  # invented
+    margins = {f["fiscal_year"]: f["ebitda_musd"] / f["revenue_musd"] * 100 for f in fys}
+    # Invented project: 60 MW at about USD 10m per MW, 55% equity-funded, pro rata to our stake
+    campus_cost = 60 * 10.0
+    proposal = round(campus_cost * 0.55 * c["ownership_pct"] / 100, -1)
 
     story = [
         Paragraph("Investment Committee memo", H1),
@@ -277,8 +297,9 @@ def ironbridge_memo(path: Path) -> None:
         Paragraph("1. Recommendation", H2),
         Paragraph(
             f"We recommend approving a follow-on equity investment of up to <b>{m(proposal)}</b> to fund a 60 MW "
-            f"fifth campus in Paris, pre-let at 70% to an existing hyperscale tenant. The investment would be made "
-            f"pro rata to our {c['ownership_pct']:.1f}% stake. This proposal replaces the follow-on of "
+            f"fifth campus in Paris (total cost about {m(campus_cost, 0)}, 55% equity-funded), pre-let at 70% to an "
+            f"existing hyperscale tenant. The investment would be made pro rata to our {c['ownership_pct']:.1f}% stake. "
+            f"This smaller, pre-let-only scheme replaces the follow-on of "
             f"{m(terminated['deal_value_musd']) if terminated else 'n/a'} with "
             f"{terminated['counterparty'] if terminated else 'n/a'}, which was terminated on "
             f"{d(terminated['deal_date']) if terminated else 'n/a'} after the co-investor withdrew.", BODY),
@@ -315,10 +336,16 @@ def ironbridge_memo(path: Path) -> None:
             f"<b>Leverage.</b> FY2025 net debt of {m(fy25['net_debt_musd'])} is {leverage:.1f}x FY2025 EBITDA of "
             f"{m(fy25['ebitda_musd'])}, up from {m(year(c, 2024)['net_debt_musd'])} at the end of FY2024. The follow-on "
             f"must be equity-funded; no new debt is proposed until leverage falls.",
-            f"<b>Margin.</b> The EBITDA margin was {fy25['ebitda_musd'] / fy25['revenue_musd'] * 100:.1f}% in FY2025, "
-            f"below hyperscale peers, mainly because of power costs that are passed through only with a lag.",
+            f"<b>Margin.</b> The EBITDA margin was {margins[2025]:.1f}% in FY2025 (FY{min(margins)}: "
+            f"{margins[min(margins)]:.1f}%), "
+            + ("in line with hyperscale peers (roughly 45-55%), but power costs are passed through to tenants only "
+               "with a lag, so a price spike would compress it."
+               if margins[2025] >= 45 else
+               "below hyperscale peers (roughly 45-55%), mainly because of power costs that are passed through "
+               "only with a lag."),
             "<b>Construction.</b> Cost overruns on electrical equipment of 10-15% are possible; the budget holds an 8% contingency.",
-            "<b>Execution history.</b> The 2025 follow-on fell through; a second failure would damage tenant confidence.",
+            f"<b>Execution history.</b> The {terminated['deal_date'].year if terminated else 'previous'} follow-on "
+            f"fell through; a second failure would damage tenant confidence.",
         ]),
         Paragraph("6. Data gaps", H2),
         Paragraph(
@@ -339,11 +366,20 @@ def summit_budget(path: Path) -> None:
     c = load_company("CO-044")
     q25 = {q: quarter(c, 2025, q) for q in (1, 2, 3, 4)}
     q26 = {q: quarter(c, 2026, q) for q in (1, 2, 3)}
-    growth = 0.035          # invented budget assumptions
-    margin = 0.58
-    capex_split = [0.20, 0.30, 0.30, 0.20]
-    capex_total = 160.0
+    fy25 = year(c, 2025)
     mw = sum(a["capacity_value"] or 0 for a in c["assets"])
+    # Invented budget assumptions, anchored on the actuals so they don't contradict them:
+    # Q4 2026 follows the year-to-date trend; FY2027 grows modestly on the FY2026 run-rate.
+    ytd_growth = (sum(r["revenue_musd"] for r in q26.values())
+                  / sum(q25[q]["revenue_musd"] for q in (1, 2, 3)) - 1)
+    q4_forecast = round(q25[4]["revenue_musd"] * (1 + ytd_growth), 2)
+    fy26 = {**{q: r["revenue_musd"] for q, r in q26.items()}, 4: q4_forecast}
+    growth = 0.03
+    margin = round(fy25["ebitda_musd"] / fy25["revenue_musd"] + 0.005, 3)  # small cost saving
+    capex_split = [0.20, 0.30, 0.30, 0.20]
+    capex_total = round(fy25["revenue_musd"] * 0.25, 1)  # inverter repowering, ~25% of revenue
+    capacity_factor = 0.22
+    realised_price = fy25["revenue_musd"] * 1e6 / (mw * capacity_factor * 8760)
 
     wb = Workbook()
     head = Font(bold=True, color="FFFFFF")
@@ -364,15 +400,18 @@ def summit_budget(path: Path) -> None:
                f"Draft for board approval, 6 November 2026 · {DISCLAIMER}"])
     ws.append([])
     header(ws, ["Line item", "Q1 2027", "Q2 2027", "Q3 2027", "Q4 2027", "FY2027"])
-    revenue = [round(q25[q]["revenue_musd"] * (1 + growth) ** 2, 2) for q in (1, 2, 3, 4)]
+    revenue = [round(fy26[q] * (1 + growth), 2) for q in (1, 2, 3, 4)]
     ebitda = [round(r * margin, 2) for r in revenue]
     opex = [round(r - e, 2) for r, e in zip(revenue, ebitda)]
     capex = [round(capex_total * s, 2) for s in capex_split]
     for label, vals in (("Revenue", revenue), ("Operating costs", opex), ("EBITDA", ebitda), ("Capex", capex)):
         ws.append([label, *vals, round(sum(vals), 2)])
     ws.append(["EBITDA margin", *[f"{margin * 100:.1f}%"] * 4, f"{margin * 100:.1f}%"])
-    ws.append(["Revenue vs same quarter FY2025", *[f"{((1 + growth) ** 2 - 1) * 100:+.1f}%"] * 4,
-               f"{(sum(revenue) / year(c, 2025)['revenue_musd'] - 1) * 100:+.1f}%"])
+    ws.append(["Revenue vs same quarter FY2026", *[f"{growth * 100:+.1f}%"] * 4,
+               f"{(sum(revenue) / sum(fy26.values()) - 1) * 100:+.1f}%"])
+    ws.append(["Revenue vs same quarter FY2025",
+               *[f"{(r / q25[q]['revenue_musd'] - 1) * 100:+.1f}%" for r, q in zip(revenue, (1, 2, 3, 4))],
+               f"{(sum(revenue) / fy25['revenue_musd'] - 1) * 100:+.1f}%"])
 
     # Sheet 2: 2026 actuals vs target, from the database
     ws2 = wb.create_sheet("2026 Actual vs Target")
@@ -385,7 +424,6 @@ def summit_budget(path: Path) -> None:
         ws2.append([f"Q{q} 2026", row["revenue_musd"], row["revenue_target_musd"], round(var, 2),
                     f"{var / row['revenue_target_musd'] * 100:+.1f}%", row["ebitda_musd"],
                     "Beat" if var >= 0 else "Missed"])
-    q4_forecast = round(q25[4]["revenue_musd"] * 1.02, 2)
     ws2.append(["Q4 2026 (forecast)", q4_forecast, "", "", "", "", "Forecast"])
     ytd = sum(r["revenue_musd"] for r in q26.values())
     ytd_t = sum(r["revenue_target_musd"] for r in q26.values())
@@ -399,11 +437,17 @@ def summit_budget(path: Path) -> None:
     ws3 = wb.create_sheet("Assumptions")
     header(ws3, ["Assumption", "Value", "Note"])
     for row in (
-        ["Revenue growth vs FY2025, per year", f"{growth * 100:.1f}%", "Applied for two years to each FY2025 quarter"],
-        ["EBITDA margin", f"{margin * 100:.1f}%", f"FY2025 actual: {year(c, 2025)['ebitda_musd'] / year(c, 2025)['revenue_musd'] * 100:.1f}%"],
+        ["Q4 2026 revenue forecast", q4_forecast,
+         f"Q4 2025 actual grown by the Q1-Q3 2026 year-on-year rate ({ytd_growth * 100:+.1f}%)"],
+        ["Revenue growth FY2027 vs FY2026", f"{growth * 100:.1f}%",
+         "Applied to each FY2026 quarter (Q1-Q3 actual, Q4 forecast); PPA indexation"],
+        ["EBITDA margin", f"{margin * 100:.1f}%", f"FY2025 actual: {fy25['ebitda_musd'] / fy25['revenue_musd'] * 100:.1f}%, "
+                                                   "plus 0.5 points from the new O&M contract"],
         ["Capex FY2027", capex_total, "Repowering of inverters at Lyon Solar farm; split 20/30/30/20 by quarter"],
         ["Installed capacity (MW)", round(mw, 1), " + ".join(f"{a['asset_name']} {a['capacity_value']:,.1f} MW" for a in c["assets"])],
-        ["Average realised price (USD/MWh)", 67.5, "Blend of PPA and merchant sales"],
+        ["Capacity factor", f"{capacity_factor * 100:.0f}%", "Long-run average for the sites"],
+        ["Average realised price (USD/MWh)", round(realised_price, 1),
+         "FY2025 revenue / (capacity x capacity factor x 8,760 h); blend of PPA and merchant sales"],
         ["FY2025 revenue (USD m)", year(c, 2025)["revenue_musd"], "Audited, from the annual accounts"],
         ["FY2025 net debt (USD m)", year(c, 2025)["net_debt_musd"], "No refinancing planned in FY2027"],
     ):

@@ -9,7 +9,6 @@ country from city).
 SECTORS = {
     "energy": {
         "unit": "MW",
-        "capacity_range": (20, 800),
         "subsectors": {
             "Solar": "Solar farm",
             "Onshore wind": "Wind farm",
@@ -20,7 +19,6 @@ SECTORS = {
     },
     "data_centers": {
         "unit": "MW",
-        "capacity_range": (2, 300),
         "subsectors": {
             "Hyperscale": "Data center campus",
             "Colocation": "Colocation data center",
@@ -30,7 +28,6 @@ SECTORS = {
     },
     "fiber": {
         "unit": "km",
-        "capacity_range": (50, 5000),
         "subsectors": {
             "FTTH": "FTTH network",
             "Long-haul": "Long-haul fiber route",
@@ -40,7 +37,6 @@ SECTORS = {
     },
     "toll_roads": {
         "unit": "km",
-        "capacity_range": (5, 300),
         "subsectors": {
             "Toll road": "Toll road",
             "Bridge & tunnel": "Toll bridge",
@@ -49,7 +45,6 @@ SECTORS = {
     },
     "water": {
         "unit": "ML/day",
-        "capacity_range": (20, 1000),
         "subsectors": {
             "Water treatment": "Water treatment plant",
             "Desalination": "Desalination plant",

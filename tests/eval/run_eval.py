@@ -334,9 +334,13 @@ def write_markdown(results: list[Result], base_url: str, started: dt.datetime, s
         "## Grader changes",
         "",
         "- 2026-11-13: the first run scored 24/25 because the grader missed a correct answer written as"
-        " \"Two\" (Q23: 2 terminated deals, USD 531.0m). The grader was fixed to read the number words"
-        " one to twenty when the expected value is a whole number of 20 or less (number tolerance"
-        " unchanged), and the full suite was rerun.",
+        " \"Two\" (Q23: 2 terminated deals, USD 531.0m on the dataset of the time). The grader was fixed"
+        " to read the number words one to twenty when the expected value is a whole number of 20 or less"
+        " (number tolerance unchanged), and the full suite was rerun.",
+        "- 2026-11-13: the fake data was regenerated with realistic values per sector (EBITDA margins at"
+        " or below ~60%, leverage of 4-8.5x EBITDA, commissioning dates no earlier than each technology,"
+        " revenue, book and deal values scaled to asset capacity). Same companies and the same three"
+        " Q3 2026 energy misses; expected answers rebuilt from MySQL. No grader change.",
         "",
         "## By category",
         "",

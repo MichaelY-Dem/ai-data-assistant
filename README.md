@@ -1,3 +1,108 @@
+# Portfolio Analyst Assistant
+
+An AI assistant that answers plain-English questions about an infrastructure investment portfolio
+by querying a live MySQL database through a read-only MCP server, and summarizes uploaded reports
+with every claim cited to its source.
+
+**▶ [Watch the demo video](https://youtu.be/dgRyiO9YzMg)**
+
+![Portfolio Analyst Assistant chat screen](docs/screenshots/chat-ui.png)
+
+## Highlights
+
+- **Claude Agent SDK + MCP**: a FastAPI backend runs Claude through the Claude Agent SDK. Its only
+  tools come from a custom MCP server (`list_tables`, `describe_table`, `run_query`), so every
+  answer is computed from live data rather than recalled.
+- **Read-only database access, enforced twice**: the MCP server accepts a single plain `SELECT`
+  and runs it in a rolled-back `READ ONLY` transaction, and the MySQL account it connects with has
+  `SELECT` and nothing else.
+- **Cited document summaries**: PDF and Excel uploads (stored in Azure Blob Storage) are
+  summarized with page and sheet citations, and combined with database figures into a one-page
+  investment summary.
+- **Role-based access**: JWT sign-in with Analyst and Viewer roles. Viewers can't see deal data,
+  and this is enforced by a separate MySQL account, not just by the prompt.
+- **Prompt injection tested**: a test document hides instructions to leak the system prompt and
+  delete data. Live tests confirm they are ignored and the database is unchanged
+  ([SECURITY.md](SECURITY.md)).
+- **25/25 measured accuracy**: a 25-question evaluation whose expected answers are recomputed from
+  MySQL before every run ([docs/eval-results.md](docs/eval-results.md)).
+
+## Architecture
+
+```mermaid
+flowchart LR
+    user["Analyst or Viewer<br/>(browser)"] --> ui["React + Vite<br/>chat and documents UI"]
+    ui -->|"JWT"| api["FastAPI backend<br/>sign-in, roles, rate limit"]
+    api --> sdk["Claude Agent SDK"]
+    sdk <--> claude["Claude"]
+    sdk -->|"stdio, --role from token"| mcp["MCP server<br/>SELECT-only validation"]
+    mcp -->|"read-only account<br/>(Viewer: no deals table)"| db[("MySQL<br/>portfolio")]
+    api --> blob[("Azure Blob Storage<br/>(Azurite locally)")]
+    api -->|"INSERT-only account"| log[("MySQL<br/>query_log")]
+    gen["Fake data generator<br/>+ cleaning pipeline"] -->|"admin, setup only"| db
+```
+
+## Tech stack
+
+| Layer | Tools |
+|---|---|
+| AI | Claude (Sonnet) via the Claude Agent SDK, Model Context Protocol (MCP) Python SDK |
+| Backend | Python 3.12, FastAPI, Uvicorn, PyJWT, bcrypt |
+| Frontend | React 19, Vite, react-markdown + remark-gfm |
+| Data | MySQL 8 (PyMySQL), Faker for the fictional dataset |
+| Documents | Azure Blob Storage (Azurite emulator locally), pypdf, openpyxl, ReportLab |
+| Testing | pytest (unit, plus live tests against real Claude and MySQL), a scored accuracy eval |
+
+## Run it locally
+
+You need Windows PowerShell, Python 3.12, Node.js 20.19+, MySQL 8, and the Claude Code CLI signed
+in with `claude login` (the backend uses those credentials, not an API key).
+
+```powershell
+# 1. Install
+py -3.12 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+npm install --prefix frontend
+npm install -g azurite
+
+# 2. Configure: copy the template and fill in the passwords, JWT secret and password hashes
+Copy-Item .env.example .env
+
+# 3. Create the fictional portfolio and the database accounts
+.venv\Scripts\python.exe data\generate_fake_data.py
+.venv\Scripts\python.exe data\clean_and_load.py
+.venv\Scripts\python.exe data\create_reader_user.py
+.venv\Scripts\python.exe data\create_viewer_user.py
+.venv\Scripts\python.exe data\create_logger_user.py
+
+# 4. Start Azurite, the backend and the frontend, each in its own window
+azurite --silent --location .azurite
+.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+npm --prefix frontend run dev
+```
+
+Open http://localhost:5173 and sign in. The sections below explain each step in detail: the
+`.env` values, the sign-in setup, documents, tests and the evaluation.
+
+---
+
+## Detailed setup
+
+### Database (first run)
+
+`.env.example` lists every setting. The setup scripts connect as `MYSQL_ADMIN_USER`; the running
+app never does. Each `create_*_user.py` script creates one least-privilege account (see
+[SECURITY.md](SECURITY.md)) and is safe to rerun.
+
+```powershell
+.venv\Scripts\python.exe data\generate_fake_data.py    # messy CSVs in data\raw\
+.venv\Scripts\python.exe data\clean_and_load.py        # clean, log fixes, load MySQL (--skip-load: clean only)
+.venv\Scripts\python.exe data\create_reader_user.py    # read-only account for the MCP server
+```
+
+[docs/data-cleaning.md](docs/data-cleaning.md) lists every fix the cleaning pipeline made to the
+raw data.
+
 ## Data model
 
 A fictional infrastructure investment portfolio in MySQL (`data/schema.sql`). All money columns
@@ -31,6 +136,7 @@ statements, and it connects as a read-only MySQL user, so there are two layers o
 
 ### Answering business questions from live data
 ![Energy companies that missed their revenue target](docs/screenshots/missed-targets.png)
+
 ## Backend API (Phase 4)
 
 `backend/main.py` is a FastAPI app. `POST /chat` sends a question to Claude (Sonnet) through the
@@ -185,6 +291,7 @@ extraction, prompt escaping and the endpoints are in `tests/test_documents.py`:
 ```powershell
 .venv\Scripts\python.exe -m pytest
 ```
+
 ### Document summaries with sources
 Uploaded reports are stored in Azure Blob Storage (developed locally with the Azurite emulator), and every claim cites its file and page.
 
@@ -192,6 +299,7 @@ Uploaded reports are stored in Azure Blob Storage (developed locally with the Az
 Combines a company's database figures with its uploaded documents into a one-page summary, with sources cited.
 ![One-page company summary, part 1](docs/screenshots/one-page-summary1.png)
 ![One-page company summary, part 2](docs/screenshots/one-page-summary2.png)
+
 ## Sign-in, roles and security (Phase 7)
 
 Users sign in before they can ask anything. There are two roles, and the backend enforces what
@@ -294,6 +402,7 @@ Viewers can't see deal data. This is enforced in the backend and database permis
 ### Prompt injection defense
 A test document hides instructions to reveal the system prompt and delete data. Claude treats them as text and nothing changes. See [SECURITY.md](SECURITY.md).
 ![Prompt injection test](docs/screenshots/prompt-injection.png)
+
 ## Accuracy evaluation and usage export (Phase 8)
 
 ### Accuracy evaluation

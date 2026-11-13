@@ -69,7 +69,7 @@
       "sql": "SELECT AVG(f.revenue_musd) FROM financials f JOIN companies c ON c.company_id = f.company_id WHERE c.sector = 'energy' AND f.fiscal_year = 2025",
       "expected": {
         "numbers": [
-          454.5875
+          225.275
         ]
       }
     },
@@ -100,11 +100,11 @@
           "water"
         ],
         "numbers": [
-          315.72,
-          258.78,
-          115.9111,
-          304.6,
-          226.0444
+          117.22,
+          118.59,
+          33.9222,
+          470.4667,
+          267.9778
         ]
       }
     },
@@ -116,7 +116,7 @@
       "sql": "SELECT AVG(a.book_value_musd) FROM assets a JOIN companies c ON c.company_id = a.company_id WHERE c.sector = 'data_centers'",
       "expected": {
         "numbers": [
-          897.94
+          417.376
         ]
       }
     },
@@ -129,14 +129,14 @@
       "sql": "SELECT c.name, f.revenue_musd FROM financials f JOIN companies c ON c.company_id = f.company_id WHERE f.fiscal_year = 2025 AND f.revenue_musd IS NOT NULL ORDER BY f.revenue_musd DESC LIMIT 3",
       "expected": {
         "names": [
-          "Willow Datacenters Inc.",
-          "Sandstone Digital PLC",
-          "Hawthorn Cloud Inc."
+          "Prairie Tollways LLC",
+          "Driftwood Expressway Inc.",
+          "Monarch Motorways Infrastructure"
         ],
         "numbers": [
-          1237.4,
-          1003.7,
-          950.5
+          1617.8,
+          1210.4,
+          1189.1
         ]
       }
     },
@@ -148,10 +148,10 @@
       "sql": "SELECT c.name, f.ebitda_musd FROM financials f JOIN companies c ON c.company_id = f.company_id WHERE f.fiscal_year = 2025 AND f.ebitda_musd IS NOT NULL ORDER BY f.ebitda_musd DESC LIMIT 1",
       "expected": {
         "names": [
-          "Alder Power Group"
+          "Prairie Tollways LLC"
         ],
         "numbers": [
-          627.2
+          892.9
         ]
       }
     },
@@ -165,10 +165,10 @@
       "expected": {
         "names": [
           "Tidewater Wind Infrastructure",
-          "Glenmore Energy Inc.",
-          "Alder Power Group",
           "Falcon Power Ltd",
-          "Bramble Energy Partners"
+          "Glenmore Energy Inc.",
+          "Quarry Solar Group",
+          "Alder Power Group"
         ]
       }
     },
@@ -180,10 +180,10 @@
       "sql": "SELECT c.sector, SUM(f.revenue_musd) AS total FROM financials f JOIN companies c ON c.company_id = f.company_id WHERE f.fiscal_year = 2025 GROUP BY c.sector ORDER BY total DESC LIMIT 1",
       "expected": {
         "names": [
-          "data_centers"
+          "toll_roads"
         ],
         "numbers": [
-          5809.7
+          8384.2
         ]
       }
     },
@@ -196,9 +196,9 @@
       "sql": "SELECT c.name, f.net_debt_musd FROM financials f JOIN companies c ON c.company_id = f.company_id WHERE f.fiscal_year = 2025 AND f.net_debt_musd IS NOT NULL ORDER BY f.net_debt_musd DESC LIMIT 3",
       "expected": {
         "names": [
-          "Willow Datacenters Inc.",
-          "Hawthorn Cloud Inc.",
-          "Cascade Datacenters Ltd"
+          "Prairie Tollways LLC",
+          "Monarch Motorways Infrastructure",
+          "Evergreen Expressway LLC"
         ]
       }
     },
@@ -250,7 +250,7 @@
       "sql": "SELECT q.revenue_target_musd - q.revenue_musd FROM quarterly_financials q JOIN companies c ON c.company_id = q.company_id WHERE c.name = 'Alder Power Group' AND q.fiscal_year = 2026 AND q.quarter = 3",
       "expected": {
         "numbers": [
-          22.67
+          2.57
         ]
       }
     },
@@ -293,7 +293,7 @@
       "sql": "SELECT SUM(deal_value_musd) FROM deals WHERE status = 'closed'",
       "expected": {
         "numbers": [
-          131035.1
+          98198.9
         ]
       }
     },
@@ -320,7 +320,7 @@
       "expected": {
         "numbers": [
           2,
-          531.0
+          1173.3
         ]
       }
     },
@@ -343,7 +343,7 @@
       "sql": "SELECT SUM(deal_value_musd) FROM deals WHERE status = 'pending'",
       "expected": {
         "must_not_contain": [
-          1002.3
+          1494.9
         ]
       }
     }

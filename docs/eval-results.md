@@ -1,6 +1,6 @@
 # Accuracy evaluation results
 
-**Date:** 2026-11-13 09:11 (local time)  
+**Date:** 2026-11-13 09:55 (local time)  
 **Score:** 25/25 correct (100%)  
 **Backend:** http://127.0.0.1:8000  
 **Questions:** `tests/eval/questions.json`; expected answers recomputed from MySQL at the start of the run.
@@ -9,7 +9,8 @@ Numbers must match within max(0.051, 0.05% of the expected value), or USD 51m wh
 
 ## Grader changes
 
-- 2026-11-13: the first run scored 24/25 because the grader missed a correct answer written as "Two" (Q23: 2 terminated deals, USD 531.0m). The grader was fixed to read the number words one to twenty when the expected value is a whole number of 20 or less (number tolerance unchanged), and the full suite was rerun.
+- 2026-11-13: the first run scored 24/25 because the grader missed a correct answer written as "Two" (Q23: 2 terminated deals, USD 531.0m on the dataset of the time). The grader was fixed to read the number words one to twenty when the expected value is a whole number of 20 or less (number tolerance unchanged), and the full suite was rerun.
+- 2026-11-13: the fake data was regenerated with realistic values per sector (EBITDA margins at or below ~60%, leverage of 4-8.5x EBITDA, commissioning dates no earlier than each technology, revenue, book and deal values scaled to asset capacity). Same companies and the same three Q3 2026 energy misses; expected answers rebuilt from MySQL. No grader change.
 
 ## By category
 
@@ -27,31 +28,31 @@ Numbers must match within max(0.051, 0.05% of the expected value), or USD 51m wh
 
 | ID | Category | Question | Role | Result | Seconds | Detail |
 |---|---|---|---|---|---|---|
-| Q01 | count | How many portfolio companies are in the database in total, including exited ones? | analyst | **PASS** | 8.2 | all values found |
-| Q02 | count | How many active companies are in the data centers sector? | analyst | **PASS** | 6.8 | all values found |
-| Q03 | count | How many portfolio companies have we exited? | analyst | **PASS** | 8.1 | all values found |
-| Q04 | count | How many physical assets does the portfolio hold in total, across all companies? | analyst | **PASS** | 6.9 | all values found |
-| Q05 | count | How many portfolio companies are based in Canada (company country)? | analyst | **PASS** | 7.4 | all values found |
-| Q06 | sector average | What was the average FY2025 revenue of energy sector companies, in USD millions? | analyst | **PASS** | 7.8 | all values found |
-| Q07 | sector average | What is our average ownership stake (%) in active toll road companies? | analyst | **PASS** | 9.3 | all values found |
-| Q08 | sector average | What was the average FY2024 EBITDA per company in each sector, in USD millions? Show every sector. | analyst | **PASS** | 9.3 | all values found |
-| Q09 | sector average | What is the average book value of the assets owned by data center companies, in USD millions per asset? | analyst | **PASS** | 8.5 | all values found |
-| Q10 | ranking | Which three companies had the highest revenue in FY2025, and how much revenue did each have? | analyst | **PASS** | 8.6 | all values found |
-| Q11 | ranking | Which company had the highest EBITDA in FY2025, and what was it? | analyst | **PASS** | 9.4 | all values found |
-| Q12 | ranking | Rank the top 5 companies by total installed asset capacity in MW. | analyst | **PASS** | 9.7 | all values found |
-| Q13 | ranking | Which sector had the highest total revenue in FY2025, and what was that total? | analyst | **PASS** | 9.1 | all values found |
-| Q14 | ranking | Which three companies had the highest net debt at the end of FY2025? | analyst | **PASS** | 8.6 | all values found |
-| Q15 | quarterly target miss | Which energy companies missed their revenue target in Q3 2026? | analyst | **PASS** | 9.8 | all values found |
-| Q16 | quarterly target miss | How many companies, across all sectors, missed their revenue target in Q3 2026? | analyst | **PASS** | 8.1 | all values found |
-| Q17 | quarterly target miss | Which water companies missed their revenue target in all four quarters of 2025? | analyst | **PASS** | 9.9 | all values found |
+| Q01 | count | How many portfolio companies are in the database in total, including exited ones? | analyst | **PASS** | 11.2 | all values found |
+| Q02 | count | How many active companies are in the data centers sector? | analyst | **PASS** | 10.2 | all values found |
+| Q03 | count | How many portfolio companies have we exited? | analyst | **PASS** | 10.4 | all values found |
+| Q04 | count | How many physical assets does the portfolio hold in total, across all companies? | analyst | **PASS** | 13.2 | all values found |
+| Q05 | count | How many portfolio companies are based in Canada (company country)? | analyst | **PASS** | 11.5 | all values found |
+| Q06 | sector average | What was the average FY2025 revenue of energy sector companies, in USD millions? | analyst | **PASS** | 11.9 | all values found |
+| Q07 | sector average | What is our average ownership stake (%) in active toll road companies? | analyst | **PASS** | 13.7 | all values found |
+| Q08 | sector average | What was the average FY2024 EBITDA per company in each sector, in USD millions? Show every sector. | analyst | **PASS** | 13.9 | all values found |
+| Q09 | sector average | What is the average book value of the assets owned by data center companies, in USD millions per asset? | analyst | **PASS** | 12.9 | all values found |
+| Q10 | ranking | Which three companies had the highest revenue in FY2025, and how much revenue did each have? | analyst | **PASS** | 16.6 | all values found |
+| Q11 | ranking | Which company had the highest EBITDA in FY2025, and what was it? | analyst | **PASS** | 9.9 | all values found |
+| Q12 | ranking | Rank the top 5 companies by total installed asset capacity in MW. | analyst | **PASS** | 16.3 | all values found |
+| Q13 | ranking | Which sector had the highest total revenue in FY2025, and what was that total? | analyst | **PASS** | 12.1 | all values found |
+| Q14 | ranking | Which three companies had the highest net debt at the end of FY2025? | analyst | **PASS** | 16.5 | all values found |
+| Q15 | quarterly target miss | Which energy companies missed their revenue target in Q3 2026? | analyst | **PASS** | 14.4 | all values found |
+| Q16 | quarterly target miss | How many companies, across all sectors, missed their revenue target in Q3 2026? | analyst | **PASS** | 13.9 | all values found |
+| Q17 | quarterly target miss | Which water companies missed their revenue target in all four quarters of 2025? | analyst | **PASS** | 12.8 | all values found |
 | Q18 | quarterly target miss | By how much did Alder Power Group miss its Q3 2026 revenue target, in USD millions (target minus actual)? | analyst | **PASS** | 8.9 | all values found |
-| Q19 | quarterly target miss | How many data center companies beat their revenue target in Q2 2026? | analyst | **PASS** | 9.9 | all values found |
-| Q20 | deals by status | How many deals are there in each status (closed, pending, terminated)? | analyst | **PASS** | 7.0 | all values found |
-| Q21 | deals by status | What is the total disclosed value of all closed deals, in USD millions? | analyst | **PASS** | 7.3 | all values found |
-| Q22 | deals by status | Which companies have a pending deal right now? | analyst | **PASS** | 9.3 | all values found |
-| Q23 | deals by status | How many deals were terminated, and what was their combined value in USD millions? | analyst | **PASS** | 9.1 | all values found |
-| Q24 | missing data | What was the total revenue of the portfolio in fiscal year 2019? | analyst | **PASS** | 8.4 | said data is missing |
-| Q25 | viewer restricted | What is the total value of all pending deals, in USD millions? | viewer | **PASS** | 4.0 | refused, nothing leaked |
+| Q19 | quarterly target miss | How many data center companies beat their revenue target in Q2 2026? | analyst | **PASS** | 14.6 | all values found |
+| Q20 | deals by status | How many deals are there in each status (closed, pending, terminated)? | analyst | **PASS** | 14.1 | all values found |
+| Q21 | deals by status | What is the total disclosed value of all closed deals, in USD millions? | analyst | **PASS** | 11.5 | all values found |
+| Q22 | deals by status | Which companies have a pending deal right now? | analyst | **PASS** | 16.5 | all values found |
+| Q23 | deals by status | How many deals were terminated, and what was their combined value in USD millions? | analyst | **PASS** | 10.0 | all values found |
+| Q24 | missing data | What was the total revenue of the portfolio in fiscal year 2019? | analyst | **PASS** | 9.1 | said data is missing |
+| Q25 | viewer restricted | What is the total value of all pending deals, in USD millions? | viewer | **PASS** | 5.7 | refused, nothing leaked |
 
 ## Answers
 
@@ -86,12 +87,9 @@ There are 10 active companies in the data centers sector. The database has no ex
 Expected: `{"numbers": [11]}`  
 Tools used: list_tables, describe_table, describe_table, run_query
 
-We have exited 11 of our 50 portfolio companies. Both the company records and the deal records give this count.
+We have exited 11 of our 50 portfolio companies. That's the number of companies with status "exited" in the companies table. It matches the 11 companies that have a closed full-exit deal in the deals table.
 
-- The `companies` table has 11 companies with status "exited".
-- The `deals` table has closed full-exit deals for 11 companies.
-
-I didn't check that these are the same 11 companies. I counted partial exits separately and left them out.
+I didn't count partial exits. A company we've only partly sold would still show as active.
 
 </details>
 
@@ -100,7 +98,7 @@ I didn't check that these are the same 11 companies. I counted partial exits sep
 Expected: `{"numbers": [129]}`  
 Tools used: list_tables, describe_table, run_query
 
-The portfolio holds **129 physical assets** in total. They sit across 50 companies and are counted from the `assets` table.
+The portfolio holds **129 physical assets** in total. They sit across 50 companies, and the count comes from the `assets` table.
 
 </details>
 
@@ -109,7 +107,7 @@ The portfolio holds **129 physical assets** in total. They sit across 50 compani
 Expected: `{"numbers": [9]}`  
 Tools used: list_tables, describe_table, run_query
 
-Nine portfolio companies are based in Canada, based on the company country field. Six are active and three have exited.
+9 portfolio companies have Canada as their company country. 6 are active and 3 have exited.
 
 | Status | Companies |
 |---|---|
@@ -117,169 +115,154 @@ Nine portfolio companies are based in Canada, based on the company country field
 | Exited | 3 |
 | **Total** | **9** |
 
-If you only want current holdings, the answer is 6.
+I counted rows in `companies` where `country` = 'Canada'. If you only want current holdings, the number is 6.
 
 </details>
 
 <details><summary>Q06 PASS: What was the average FY2025 revenue of energy sector companies, in USD millions?</summary>
 
-Expected: `{"numbers": [454.5875]}`  
+Expected: `{"numbers": [225.275]}`  
 Tools used: list_tables, describe_table, describe_table, run_query
 
-The average FY2025 revenue of energy sector companies was **USD 454.6m**. That is the simple average across 8 companies, each with a reported FY2025 revenue figure.
+The average FY2025 revenue of energy sector companies was **USD 225.3m**. I calculated it as the simple average of FY2025 revenue across 8 companies.
 
-The 8 companies include one that has exited. I didn't filter by status. If you want active companies only, I can rerun it that way.
+| Metric | Value |
+|---|---|
+| Energy companies with FY2025 revenue | 8 |
+| Average FY2025 revenue (USD m) | 225.3 |
+
+One of the 8 companies has status "exited". I included it because it has FY2025 financials. I can rerun the average for active companies only if you'd like.
 
 </details>
 
 <details><summary>Q07 PASS: What is our average ownership stake (%) in active toll road companies?</summary>
 
 Expected: `{"numbers": [77.6222]}`  
-Tools used: list_tables, describe_table, describe_table, run_query
+Tools used: list_tables, describe_table, run_query
 
-The average ownership stake across our active toll road companies is **77.6%**. It's a simple, unweighted average of the `ownership_pct` field in the companies table.
-
-| Metric | Value |
-|---|---|
-| Active toll road companies | 9 |
-| Companies with a stake recorded | 9 |
-| Average ownership stake (%) | 77.6 |
-| Lowest stake (%) | 35.2 |
-| Highest stake (%) | 100.0 |
-
-The average isn't weighted by company size or investment value.
+Our average ownership stake across active toll road companies is **77.6%**. This is a simple, unweighted average of `ownership_pct` across 9 active companies in the toll roads sector. All 9 have a stake recorded, and exited companies are excluded.
 
 </details>
 
 <details><summary>Q08 PASS: What was the average FY2024 EBITDA per company in each sector, in USD millions? Show every sector.</summary>
 
-Expected: `{"names": ["energy", "data_centers", "fiber", "toll_roads", "water"], "numbers": [315.72, 258.78, 115.9111, 304.6, 226.0444]}`  
+Expected: `{"names": ["energy", "data_centers", "fiber", "toll_roads", "water"], "numbers": [117.22, 118.59, 33.9222, 470.4667, 267.9778]}`  
 Tools used: list_tables, describe_table, describe_table, run_query
 
-Average FY2024 EBITDA per company, by sector, is highest in energy (USD 315.7m) and lowest in fiber (USD 115.9m).
+Average FY2024 EBITDA per company, by sector (EBITDA ÷ companies with a reported FY2024 EBITDA):
 
-| Sector | Companies | Companies with FY2024 EBITDA | Avg FY2024 EBITDA (USD m) |
+| Sector | Companies | Companies with FY2024 EBITDA | Avg EBITDA (USD m) |
 |---|---|---|---|
-| Energy | 10 | 10 | 315.7 |
-| Toll roads | 10 | 9 | 304.6 |
-| Data centers | 10 | 10 | 258.8 |
-| Water | 10 | 9 | 226.0 |
-| Fiber | 10 | 9 | 115.9 |
+| Energy | 10 | 10 | 117.2 |
+| Data centers | 10 | 10 | 118.6 |
+| Fiber | 10 | 9 | 33.9 |
+| Toll roads | 10 | 9 | 470.5 |
+| Water | 10 | 9 | 268.0 |
 
-- I calculated each average as the mean of `ebitda_musd` in the FY2024 `financials` rows for the companies in that sector.
-- Fiber, toll roads and water each have one company with no FY2024 EBITDA value. That company is left out of the average, so those three averages cover 9 companies.
-- The averages include both active and exited companies.
+- Fiber, toll roads and water each have one company with no FY2024 EBITDA value. I left those out of the average rather than counting them as zero.
+- The figures include both active and exited companies.
 
 </details>
 
 <details><summary>Q09 PASS: What is the average book value of the assets owned by data center companies, in USD millions per asset?</summary>
 
-Expected: `{"numbers": [897.94]}`  
+Expected: `{"numbers": [417.376]}`  
 Tools used: list_tables, describe_table, describe_table, run_query
 
-The average book value is about USD 897.9m per asset. This covers the 25 assets owned by the 10 companies in the data_centers sector, and all 25 have a book value recorded.
+The average book value is **USD 417.4m per asset** across data center companies' assets. That's USD 10,434.4m total book value over 25 assets, and every asset has a book value recorded.
 
-| Metric | Value |
-|---|---|
-| Data center companies | 10 |
-| Assets | 25 |
-| Total book value (USD m) | 22,448.5 |
-| Average book value per asset (USD m) | 897.9 |
-
-I calculated the average as total book value divided by the number of assets. I picked the companies by sector (data_centers), not by asset type. None of these companies has exited.
+I included all companies in the `data_centers` sector. All of them are active, and none have exited. I calculated the average as total book value divided by asset count. The figures are current book values from the assets table, which isn't tied to a fiscal year.
 
 </details>
 
 <details><summary>Q10 PASS: Which three companies had the highest revenue in FY2025, and how much revenue did each have?</summary>
 
-Expected: `{"names": ["Willow Datacenters Inc.", "Sandstone Digital PLC", "Hawthorn Cloud Inc."], "numbers": [1237.4, 1003.7, 950.5]}`  
+Expected: `{"names": ["Prairie Tollways LLC", "Driftwood Expressway Inc.", "Monarch Motorways Infrastructure"], "numbers": [1617.8, 1210.4, 1189.1]}`  
 Tools used: list_tables, describe_table, describe_table, run_query
 
-The three companies with the highest FY2025 revenue were Willow Datacenters Inc., Sandstone Digital PLC and Hawthorn Cloud Inc.
+The three companies with the highest FY2025 revenue are Prairie Tollways LLC, Driftwood Expressway Inc. and Monarch Motorways Infrastructure.
 
 | Rank | Company | Code | FY2025 revenue (USD m) |
 |---|---|---|---|
-| 1 | Willow Datacenters Inc. | CO-010 | 1,237.4 |
-| 2 | Sandstone Digital PLC | CO-035 | 1,003.7 |
-| 3 | Hawthorn Cloud Inc. | CO-022 | 950.5 |
+| 1 | Prairie Tollways LLC | CO-019 | 1,617.8 |
+| 2 | Driftwood Expressway Inc. | CO-040 | 1,210.4 |
+| 3 | Monarch Motorways Infrastructure | CO-042 | 1,189.1 |
 
-Hawthorn's lead over the next company, Cascade Datacenters Ltd (CO-013, USD 940.8m), is small. I ranked on the `revenue_musd` figure in the annual `financials` table and left out companies with no FY2025 revenue figure.
+I ranked companies by the `revenue_musd` figure in the annual `financials` table for fiscal year 2025. I left out companies with no revenue figure for that year.
 
 </details>
 
 <details><summary>Q11 PASS: Which company had the highest EBITDA in FY2025, and what was it?</summary>
 
-Expected: `{"names": ["Alder Power Group"], "numbers": [627.2]}`  
+Expected: `{"names": ["Prairie Tollways LLC"], "numbers": [892.9]}`  
 Tools used: list_tables, describe_table, describe_table, run_query
 
-**Alder Power Group** (CO-048, energy) had the highest EBITDA in FY2025, at **USD 627.2m**.
+Prairie Tollways LLC (CO-019, toll roads) had the highest EBITDA in FY2025, at USD 892.9m.
 
 | Rank | Company | Sector | FY2025 EBITDA (USD m) | FY2025 revenue (USD m) |
 |---|---|---|---|---|
-| 1 | Alder Power Group | Energy | 627.2 | 806.3 |
-| 2 | Willow Datacenters Inc. | Data centers | 617.1 | 1,237.4 |
-| 3 | Northgate Motorways Inc. | Toll roads | 580.1 | 810.7 |
+| 1 | Prairie Tollways LLC | Toll roads | 892.9 | 1,617.8 |
+| 2 | Driftwood Expressway Inc. | Toll roads | 649.4 | 1,210.4 |
+| 3 | Monarch Motorways Infrastructure | Toll roads | 614.3 | 1,189.1 |
 
-The margin for Alder Power Group is about 77.8% (EBITDA / revenue). The lead over Willow Datacenters is small, at USD 10.1m. Companies with no reported FY2025 EBITDA were left out of the ranking.
+I compared companies that have a reported FY2025 EBITDA in the annual `financials` table. Companies with no FY2025 EBITDA value were left out.
 
 </details>
 
 <details><summary>Q12 PASS: Rank the top 5 companies by total installed asset capacity in MW.</summary>
 
-Expected: `{"names": ["Tidewater Wind Infrastructure", "Glenmore Energy Inc.", "Alder Power Group", "Falcon Power Ltd", "Bramble Energy Partners"]}`  
+Expected: `{"names": ["Tidewater Wind Infrastructure", "Falcon Power Ltd", "Glenmore Energy Inc.", "Quarry Solar Group", "Alder Power Group"]}`  
 Tools used: list_tables, describe_table, describe_table, run_query
 
-Tidewater Wind Infrastructure has the most installed capacity, at 1,808.9 MW. Four of the top five companies are still active. Glenmore Energy Inc. is the exception, because it has exited.
+The top 5 companies by total installed capacity are all energy companies. Tidewater Wind Infrastructure is first with 2,484.1 MW. I summed `capacity_value` across each company's assets that are measured in MW. I left out assets measured in km or ML/day.
 
-| Rank | Company | Code | Status | Total capacity (MW) | Assets |
-|---|---|---|---|---|---|
-| 1 | Tidewater Wind Infrastructure | CO-020 | Active | 1,808.9 | 4 |
-| 2 | Glenmore Energy Inc. | CO-038 | Exited | 1,679.2 | 4 |
-| 3 | Alder Power Group | CO-048 | Active | 1,644.8 | 4 |
-| 4 | Falcon Power Ltd | CO-043 | Active | 1,521.2 | 2 |
-| 5 | Bramble Energy Partners | CO-008 | Active | 1,143.7 | 2 |
+| Rank | Company | Status | Assets (MW-rated) | Total capacity (MW) |
+|---|---|---|---|---|
+| 1 | Tidewater Wind Infrastructure (CO-020) | Active | 4 | 2,484.1 |
+| 2 | Falcon Power Ltd (CO-043) | Active | 2 | 1,914.1 |
+| 3 | Glenmore Energy Inc. (CO-038) | Exited | 4 | 981.1 |
+| 4 | Quarry Solar Group (CO-049) | Exited | 2 | 957.0 |
+| 5 | Alder Power Group (CO-048) | Active | 4 | 641.7 |
 
-- I summed `capacity_value` across each company's assets that are measured in MW. Assets measured in km or ML/day are left out, because those units can't be added to MW.
-- The ranking uses full asset capacity. It isn't adjusted for our ownership stake.
-- Without Glenmore, the sixth-ranked company would move into fifth place. I can re-run the ranking for active companies only if you want that.
+- Glenmore Energy and Quarry Solar Group are exited companies. If you only want active holdings, Bramble Energy Partners (CO-008, 507.0 MW) replaces them at rank 5, and Alder Power Group moves up to rank 3.
+- The totals are gross asset capacity. I didn't adjust them for our ownership stake.
 
 </details>
 
 <details><summary>Q13 PASS: Which sector had the highest total revenue in FY2025, and what was that total?</summary>
 
-Expected: `{"names": ["data_centers"], "numbers": [5809.7]}`  
+Expected: `{"names": ["toll_roads"], "numbers": [8384.2]}`  
 Tools used: list_tables, describe_table, describe_table, run_query
 
-Data centers had the highest total revenue in FY2025, at USD 5,809.7m. That includes all companies with an FY2025 row, both active and exited.
+Toll roads had the highest total revenue in FY2025, at USD 8,384.2m.
 
 | Sector | FY2025 revenue (USD m) | Companies |
 |---|---|---|
-| Data centers | 5,809.7 | 10 |
-| Toll roads | 4,192.6 | 9 |
-| Energy | 3,636.7 | 8 |
-| Water | 3,307.8 | 8 |
-| Fiber | 2,722.0 | 7 |
+| Toll roads | 8,384.2 | 9 |
+| Water | 4,665.7 | 8 |
+| Data centers | 2,853.5 | 10 |
+| Energy | 1,802.2 | 8 |
+| Fiber | 827.0 | 7 |
 
-Water has one company with no FY2025 revenue reported. Its total is therefore understated. That doesn't change the ranking.
+- I summed `revenue_musd` from the annual financials for each sector. The sum includes both active and exited companies.
+- One water company has no FY2025 revenue figure, so the water total is understated. That doesn't change the ranking, because toll roads lead water by about USD 3.7bn.
 
 </details>
 
 <details><summary>Q14 PASS: Which three companies had the highest net debt at the end of FY2025?</summary>
 
-Expected: `{"names": ["Willow Datacenters Inc.", "Hawthorn Cloud Inc.", "Cascade Datacenters Ltd"]}`  
+Expected: `{"names": ["Prairie Tollways LLC", "Monarch Motorways Infrastructure", "Evergreen Expressway LLC"]}`  
 Tools used: list_tables, describe_table, describe_table, run_query
 
-The three companies with the highest net debt at the end of FY2025 were Willow Datacenters Inc., Hawthorn Cloud Inc. and Cascade Datacenters Ltd. All three are active, and all are data center companies.
+The three companies with the highest net debt at the end of FY2025 are Prairie Tollways LLC, Monarch Motorways Infrastructure and Evergreen Expressway LLC. All three are active.
 
 | Rank | Company | Code | Net debt FY2025 (USD m) |
 |---|---|---|---|
-| 1 | Willow Datacenters Inc. | CO-010 | 6,649.0 |
-| 2 | Hawthorn Cloud Inc. | CO-022 | 6,411.2 |
-| 3 | Cascade Datacenters Ltd | CO-013 | 5,503.0 |
+| 1 | Prairie Tollways LLC | CO-019 | 7,316.4 |
+| 2 | Monarch Motorways Infrastructure | CO-042 | 5,098.7 |
+| 3 | Evergreen Expressway LLC | CO-011 | 5,028.1 |
 
-Alder Power Group (CO-048) is fourth, with net debt of USD 4,942.6m.
-
-I ranked on the `net_debt_musd` figure in the FY2025 annual `financials` table.
+I used the `net_debt_musd` figure from the FY2025 annual financials. Companies with no FY2025 net debt value were left out.
 
 </details>
 
@@ -288,15 +271,15 @@ I ranked on the `net_debt_musd` figure in the FY2025 annual `financials` table.
 Expected: `{"names": ["Alder Power Group", "Summit Energy Partners", "Vantage Renewables Inc."]}`  
 Tools used: list_tables, describe_table, describe_table, run_query, run_query
 
-Three of the 7 energy companies with Q3 2026 data missed their revenue target. Alder Power Group missed by the most.
+Three of the seven energy companies with Q3 2026 data missed their revenue target. All three are active holdings.
 
 | Company | Q3 2026 revenue (USD m) | Q3 2026 target (USD m) | Variance (%) |
 |---|---|---|---|
-| Alder Power Group (CO-048) | 266.9 | 289.5 | -7.8% |
-| Summit Energy Partners (CO-044) | 199.5 | 212.5 | -6.2% |
-| Vantage Renewables Inc. (CO-005) | 172.6 | 182.0 | -5.1% |
+| Alder Power Group (CO-048) | 30.2 | 32.8 | -7.8% |
+| Summit Energy Partners (CO-044) | 13.4 | 14.3 | -6.2% |
+| Vantage Renewables Inc. (CO-005) | 8.6 | 9.1 | -5.2% |
 
-Variance = (actual revenue − target) / target. "Missed" means actual revenue was below target. The other 4 energy companies met or beat their Q3 2026 target. Every energy company had both a revenue and a target figure for the quarter.
+Variance = (actual revenue − target) / target. A company counts as a miss when actual revenue is below target. The other four energy companies met or beat their Q3 2026 targets, and none had missing revenue or target values.
 
 </details>
 
@@ -305,44 +288,50 @@ Variance = (actual revenue − target) / target. "Missed" means actual revenue w
 Expected: `{"numbers": [16]}`  
 Tools used: list_tables, describe_table, describe_table, run_query
 
-16 companies missed their Q3 2026 revenue target. Actual revenue was below the revenue target (budget) for 16 of the 39 companies that have a Q3 2026 row, across all sectors.
+16 companies missed their revenue target in Q3 2026. That means actual revenue was below the budgeted revenue target.
 
-One of the 39 has a missing revenue or target value, so it couldn't be assessed. I didn't count it as a miss. That means 16 of the 38 companies with complete data missed (42.1%).
+| Metric (Q3 2026) | Companies |
+|---|---|
+| Missed target | 16 |
+| Met or beat target | 22 |
+| Revenue or target missing (can't assess) | 1 |
+| Total with Q3 2026 data | 39 |
+
+The count covers all sectors and includes any company with a Q3 2026 row. I didn't filter by active or exited status. One company has no revenue or no target figure, so I left it out of both the missed and met counts.
 
 </details>
 
 <details><summary>Q17 PASS: Which water companies missed their revenue target in all four quarters of 2025?</summary>
 
 Expected: `{"names": ["Juniper Aqua PLC", "Rosewood Aqua Ltd", "Westbrook Water Services Partners"]}`  
-Tools used: list_tables, describe_table, describe_table, run_query, run_query
+Tools used: list_tables, describe_table, describe_table, run_query
 
-Three of the eight water companies had actual revenue below target in all four quarters of 2025: Westbrook Water Services Partners, Juniper Aqua PLC and Rosewood Aqua Ltd.
+Three water companies missed their revenue target in every quarter of 2025: Westbrook Water Services Partners, Juniper Aqua PLC and Rosewood Aqua Ltd.
 
-| Company | FY2025 revenue (USD m) | FY2025 target (USD m) | Shortfall (%) |
-|---|---|---|---|
-| Westbrook Water Services Partners (CO-006) | 464.9 | 516.1 | 9.9% |
-| Juniper Aqua PLC (CO-030) | 677.5 | 768.7 | 11.9% |
-| Rosewood Aqua Ltd (CO-036) | 186.1 | 200.0 | 6.9% |
+| Company | Q1 actual / target (USD m) | Q2 actual / target (USD m) | Q3 actual / target (USD m) | Q4 actual / target (USD m) |
+|---|---|---|---|---|
+| Westbrook Water Services Partners | 194.7 / 222.3 | 214.9 / 241.6 | 230.7 / 255.2 | 199.5 / 213.0 |
+| Juniper Aqua PLC | 196.3 / 222.4 | 213.1 / 245.1 | 241.2 / 280.3 | 210.1 / 228.7 |
+| Rosewood Aqua Ltd | 223.9 / 239.2 | 253.6 / 256.2 | 275.7 / 298.5 | 246.2 / 280.0 |
 
-- A quarter counts as missed when actual revenue is below the quarterly revenue target. Shortfall = (target − revenue) / target, summed over the four quarters.
-- Atlas Water Ltd has no revenue or target values for any quarter of 2025, so I couldn't assess it.
+- "Missed" means quarterly actual revenue was below the quarterly revenue target.
+- Atlas Water Ltd has no revenue or target figures for 2025, so I couldn't assess it.
+- The other four water companies missed in only one or two quarters.
 
 </details>
 
 <details><summary>Q18 PASS: By how much did Alder Power Group miss its Q3 2026 revenue target, in USD millions (target minus actual)?</summary>
 
-Expected: `{"numbers": [22.67]}`  
-Tools used: list_tables, describe_table, describe_table, run_query
+Expected: `{"numbers": [2.57]}`  
+Tools used: describe_table, list_tables, run_query
 
-Alder Power Group missed its Q3 2026 revenue target by USD 22.7m (target minus actual).
+Alder Power Group missed its Q3 2026 revenue target by USD 2.57m, calculated as target minus actual.
 
-| Metric (Q3 2026) | USD m |
-|---|---|
-| Revenue target | 289.53 |
-| Actual revenue | 266.86 |
-| Miss (target − actual) | 22.67 |
+| Quarter | Actual revenue (USD m) | Target revenue (USD m) | Miss (USD m) |
+|---|---|---|---|
+| Q3 2026 | 30.21 | 32.78 | 2.57 |
 
-Actual revenue was about 7.8% below target (22.67 / 289.53).
+The actual figure is 7.8% below target (2.57 / 32.78).
 
 </details>
 
@@ -351,17 +340,16 @@ Actual revenue was about 7.8% below target (22.67 / 289.53).
 Expected: `{"numbers": [9]}`  
 Tools used: list_tables, describe_table, describe_table, run_query
 
-9 of the 10 data center companies beat their revenue target in Q2 2026. The other one missed.
+Nine of the 10 data center companies beat their Q2 2026 revenue target. The other one missed.
 
-| Measure (Q2 2026, data centers) | Companies |
+| Metric | Companies |
 |---|---|
 | Beat target (actual revenue above target) | 9 |
 | Met target exactly | 0 |
 | Missed target | 1 |
-| Missing revenue or target data | 0 |
-| Total | 10 |
+| Total data center companies with Q2 2026 data | 10 |
 
-This counts every company in the data_centers sector, including any marked as exited. I treated "beat" as actual revenue strictly above the revenue target.
+I counted a company as a beat when its Q2 2026 actual revenue was higher than its budgeted revenue. No company had missing revenue or target figures. The count includes all data center companies, whether their status is active or exited.
 
 </details>
 
@@ -370,7 +358,7 @@ This counts every company in the data_centers sector, including any marked as ex
 Expected: `{"names": ["closed", "pending", "terminated"], "numbers": [132, 3, 2]}`  
 Tools used: list_tables, describe_table, run_query
 
-There are 137 deals in total. Most are closed.
+There are 137 deals in total. Most of them (132) are closed.
 
 | Status | Deals |
 |---|---|
@@ -382,18 +370,18 @@ There are 137 deals in total. Most are closed.
 
 <details><summary>Q21 PASS: What is the total disclosed value of all closed deals, in USD millions?</summary>
 
-Expected: `{"numbers": [131035.1]}`  
-Tools used: describe_table, run_query
+Expected: `{"numbers": [98198.9]}`  
+Tools used: list_tables, describe_table, run_query
 
-The total disclosed value of all closed deals is **USD 131,035.1m**.
+The total disclosed value of all closed deals is **USD 98,198.9m**.
 
 | Metric | Value |
 |---|---|
 | Closed deals | 132 |
 | Closed deals with a disclosed value | 129 |
-| Total disclosed value (USD m) | 131,035.1 |
+| Total disclosed value (USD m) | 98,198.9 |
 
-I summed `deal_value_musd` across deals with status "closed". The 3 closed deals with no disclosed value (NULL) are left out of the total. The sum covers all deal types and all years.
+I added up `deal_value_musd` for deals with status "closed". 3 closed deals have no disclosed value (NULL), so the total leaves them out. The total covers all deal types and all dates, and I didn't filter by year.
 
 </details>
 
@@ -402,63 +390,48 @@ I summed `deal_value_musd` across deals with status "closed". The 3 closed deals
 Expected: `{"names": ["Falcon Power Ltd", "Kingsley Digital Inc.", "Sterling Datacenters PLC"]}`  
 Tools used: list_tables, describe_table, describe_table, run_query
 
-Three companies have a pending deal right now. All three are partial exits.
+Three companies have a pending deal, and all three are partial exits.
 
-| Company | Deal type | Deal date | Deal value (USD m) | Equity stake (%) | Counterparty |
+| Company | Deal type | Deal date | Value (USD m) | Stake (%) | Counterparty |
 |---|---|---|---|---|---|
-| Falcon Power Ltd (CO-043) | Partial exit | 2026-07-02 | 113.4 | 31.7 | Miller Pension Fund |
-| Sterling Datacenters PLC (CO-003) | Partial exit | 2026-08-28 | 398.6 | 28.5 | Humphrey Holdings |
-| Kingsley Digital Inc. (CO-017) | Partial exit | 2026-09-23 | 490.3 | 10.2 | Arroyo Holdings |
+| Falcon Power Ltd (CO-043) | Partial exit | 2026-07-02 | 1,109.9 | 35.2 | Miller Pension Fund |
+| Sterling Datacenters PLC (CO-003) | Partial exit | 2026-08-28 | 43.1 | 38.5 | Humphrey Holdings |
+| Kingsley Digital Inc. (CO-017) | Partial exit | 2026-09-23 | 341.9 | 11.0 | Arroyo Holdings |
 
-"Pending" means deals with status = pending in the deals table. All three deal dates are before today (2026-11-13), but the deals are still marked pending.
+"Pending" means the deal's status is `pending`. All three deal dates are before today (2026-11-13) but the deals haven't closed.
 
 </details>
 
 <details><summary>Q23 PASS: How many deals were terminated, and what was their combined value in USD millions?</summary>
 
-Expected: `{"numbers": [2, 531.0]}`  
+Expected: `{"numbers": [2, 1173.3]}`  
 Tools used: describe_table, run_query
 
-Two deals were terminated, with a combined value of USD 531.0m.
+Two deals were terminated, and their combined value was USD 1,173.3m. Both have a disclosed value, so the total covers both deals.
 
-| Metric | Value |
-|---|---|
-| Terminated deals (count) | 2 |
-| Combined deal value (USD m) | 531.0 |
-
-Both deals have a disclosed value, so the total covers all of them.
+I got this by counting the deals with status "terminated" and summing their deal values.
 
 </details>
 
 <details><summary>Q24 PASS: What was the total revenue of the portfolio in fiscal year 2019?</summary>
 
 Expected: `{"rows_found": 0}`  
-Tools used: describe_table, run_query, run_query
+Tools used: describe_table, run_query
 
-The database has no revenue data for fiscal year 2019. The `financials` table only covers FY2021 to FY2025.
+There is no FY2019 data in the database, so I can't give a total revenue for that year. The `financials` table has no rows for fiscal year 2019.
 
-Total portfolio revenue for the years that are available:
-
-| Fiscal year | Companies reported | Total revenue (USD m) |
-|---|---|---|
-| FY2021 | 30 | 11,498.1 |
-| FY2022 | 37 | 14,409.3 |
-| FY2023 | 41 | 17,287.9 |
-| FY2024 | 47 | 20,707.3 |
-| FY2025 | 42 | 19,668.8 |
-
-The number of companies reporting changes from year to year. Those totals therefore aren't like-for-like comparisons.
+I can check which fiscal years the table does cover if you'd like.
 
 </details>
 
 <details><summary>Q25 PASS: What is the total value of all pending deals, in USD millions?</summary>
 
-Expected: `{"must_not_contain": [1002.3]}`  
+Expected: `{"must_not_contain": [1494.9]}`  
 Tools used: none
 
-Deal data is restricted for your Viewer role, so I can't give the total value of pending deals. Deal values and statuses sit in the `deals` table, and I can't query or reconstruct them.
+Deal data is restricted for your Viewer role, so I can't tell you the total value of pending deals. I also haven't queried the deals table, and I won't estimate or reconstruct the figure.
 
-I can answer questions about company financials, quarterly results, or physical assets from the other tables. For example, I could look at revenue or EBITDA for the companies behind your deal interest.
+I can still help with the other tables: portfolio companies, annual and quarterly financials, and physical assets. If you need the deal figure, someone with a role that can see deals will have to pull it.
 
 </details>
 
