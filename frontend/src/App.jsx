@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { askQuestion, checkHealth } from "./api.js";
+import DocumentsPanel from "./DocumentsPanel.jsx";
+import Markdown from "./Markdown.jsx";
 
 const EXAMPLE_QUESTIONS = [
   "Which energy companies missed their revenue target in the most recent quarter?",
@@ -17,6 +17,7 @@ export default function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [backendUp, setBackendUp] = useState(null); // null = not checked yet
+  const [tab, setTab] = useState("chat"); // "chat" | "documents"
   const listRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -69,9 +70,36 @@ export default function App() {
           </div>
           <StatusBadge up={backendUp} />
         </div>
+        <nav className="tabs" role="tablist" aria-label="Views">
+          {[
+            ["chat", "Chat"],
+            ["documents", "Documents"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={tab === key}
+              className={`tab ${tab === key ? "active" : ""}`}
+              onClick={() => setTab(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
       </header>
 
-      <main className="messages" ref={listRef}>
+      {/* Both views stay mounted (hidden, not removed) so switching tabs keeps their state. */}
+      <main className="docs" hidden={tab !== "documents"}>
+        {backendUp === false && (
+          <div className="banner docs-banner">
+            The backend isn't responding. Start the FastAPI server on port 8000, then refresh.
+          </div>
+        )}
+        <DocumentsPanel />
+      </main>
+
+      <main className="messages" ref={listRef} hidden={tab !== "chat"}>
         <div className="messages-inner">
           {backendUp === false && (
             <div className="banner">
@@ -112,7 +140,7 @@ export default function App() {
         </div>
       </main>
 
-      <footer className="composer">
+      <footer className="composer" hidden={tab !== "chat"}>
         <form
           className="composer-inner"
           onSubmit={(e) => {
@@ -161,19 +189,7 @@ function Message({ message }) {
   return (
     <div className="message assistant">
       <div className="bubble markdown">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            table: ({ node, ...props }) => (
-              <div className="table-wrap">
-                <table {...props} />
-              </div>
-            ),
-            a: ({ node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
-          }}
-        >
-          {message.text}
-        </ReactMarkdown>
+        <Markdown>{message.text}</Markdown>
       </div>
       <div className="meta">
         Tools used: {message.tools.length ? message.tools.join(", ") : "none"} ·{" "}

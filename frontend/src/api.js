@@ -58,3 +58,59 @@ export async function checkHealth() {
     return false;
   }
 }
+
+// --------------------------------------------------------------------------
+// Documents (Phase 6)
+// --------------------------------------------------------------------------
+
+export const MAX_UPLOAD_MB = 10;
+export const ALLOWED_EXTENSIONS = [".pdf", ".xlsx"];
+
+async function requestJson(url, options = {}) {
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch {
+    throw new ChatError(BACKEND_DOWN);
+  }
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    // empty body: backend down behind the Vite proxy
+  }
+  if (!response.ok) {
+    const detail = body?.detail;
+    if (response.status === 504) {
+      throw new ChatError("Claude took too long to answer. Please try again.");
+    }
+    if (typeof detail === "string" && detail) throw new ChatError(detail);
+    if (Array.isArray(detail) && detail[0]?.msg) throw new ChatError(detail[0].msg);
+    if (response.status >= 500 && body === null) throw new ChatError(BACKEND_DOWN);
+    throw new ChatError(`The backend returned an error (HTTP ${response.status}).`);
+  }
+  return body;
+}
+
+export function listCompanies() {
+  return requestJson("/companies");
+}
+
+export function listDocuments() {
+  return requestJson("/documents");
+}
+
+export function uploadDocument(file, companyCode) {
+  const form = new FormData();
+  form.append("file", file);
+  if (companyCode) form.append("company_code", companyCode);
+  return requestJson("/documents/upload", { method: "POST", body: form });
+}
+
+export function summarizeDocument(id) {
+  return requestJson(`/documents/${encodeURIComponent(id)}/summarize`, { method: "POST" });
+}
+
+export function onePageSummary(companyCode) {
+  return requestJson(`/companies/${encodeURIComponent(companyCode)}/one-page-summary`, { method: "POST" });
+}

@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// In development, /chat and /health are forwarded to the FastAPI backend,
+// In development, /chat, /health, /documents and /companies are forwarded to the FastAPI backend,
 // so the browser sees one origin and FastAPI needs no CORS settings.
 const BACKEND = "http://127.0.0.1:8000";
 const proxyOptions = {
@@ -19,6 +19,8 @@ export default defineConfig({
     proxy: {
       "/chat": proxyOptions,
       "/health": proxyOptions,
+      "/documents": proxyOptions,
+      "/companies": proxyOptions,
     },
   },
 });

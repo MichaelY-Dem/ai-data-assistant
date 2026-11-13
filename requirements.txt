@@ -19,3 +19,11 @@ mcp==2.3.0
 fastapi==0.162.5
 uvicorn==0.54.0
 claude-agent-sdk==0.2.181
+
+# Phase 6 documents: Azure Blob Storage (Azurite locally), file uploads, PDF/Excel reading and
+# the sample-document generator
+azure-storage-blob==12.31.1
+python-multipart==0.0.33
+pypdf==7.0.1
+openpyxl==3.1.5
+reportlab==5.1.0
